@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>LAST SIGNAL — Battle Royale</title>
+<title>VERGE — Battle Royale</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -246,21 +246,32 @@
 
   /* ---- Power-up loadout screen ---- */
   #powerupsOverlay{ overflow-y:auto; padding-top:calc(30px + env(safe-area-inset-top)); padding-bottom:30px; }
+  #puCurrency{ font-size:13px; color:var(--amber); letter-spacing:1px; margin-bottom:12px; text-transform:uppercase; }
+  #puOpenBoxBtn{ margin-bottom:8px; padding:10px 24px; font-size:12px; }
+  #puOpenBoxBtn:disabled{ opacity:0.35; cursor:not-allowed; }
+  #boxResult{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-bottom:18px; min-height:14px; text-transform:uppercase; }
   #puSelectedCount{ font-size:12px; color:var(--dim); letter-spacing:2px; margin-bottom:16px; text-transform:uppercase; }
   #puGrid{
-    display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;
-    max-width:360px; width:100%; margin-bottom:26px;
+    display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;
+    max-width:340px; width:100%; margin-bottom:26px;
   }
   .pu-card{
-    border:1px solid var(--grid); padding:10px 4px; text-align:center;
-    font-size:9px; letter-spacing:0.5px; text-transform:uppercase; cursor:pointer;
-    min-height:70px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    border:1px solid var(--grid); padding:12px 8px; text-align:center;
+    font-size:10px; letter-spacing:0.5px; text-transform:uppercase; cursor:pointer;
+    min-height:120px; display:flex; flex-direction:column; align-items:center; justify-content:center;
     transition:border-color .15s, background .15s;
   }
   .pu-card.selected{ background:rgba(245,166,35,0.14); border-color:var(--amber); }
   .pu-card.locked{ opacity:0.35; cursor:not-allowed; }
   .pu-dot{ width:14px; height:14px; border-radius:50%; margin-bottom:6px; }
-  .pu-lockinfo{ font-size:8px; color:var(--dim); margin-top:4px; letter-spacing:0.5px; }
+  .pu-lockinfo{ font-size:8px; color:var(--dim); margin-top:4px; letter-spacing:0.5px; line-height:1.3; }
+  .pu-level{ font-size:8px; color:var(--amber); margin-top:4px; letter-spacing:1px; }
+  .pu-upgrade-btn{
+    margin-top:6px; background:transparent; border:1px solid var(--grid); color:var(--amber);
+    font-family:inherit; font-size:8px; letter-spacing:0.5px; padding:4px 6px; text-transform:uppercase;
+    cursor:pointer; width:100%;
+  }
+  .pu-upgrade-btn:disabled{ color:var(--dim); border-color:var(--grid); cursor:not-allowed; opacity:0.6; }
 </style>
 </head>
 <body>
@@ -285,7 +296,7 @@
   <div id="feed"></div>
 
   <div id="healthWrap">
-    <div id="healthLabel">SIGNAL // HP</div>
+    <div id="healthLabel">VERGE // HP</div>
     <div id="healthBar"><div id="healthFill"></div></div>
     <div id="loadoutLabel">LOADOUT // —</div>
   </div>
@@ -296,7 +307,7 @@
   <div id="fireBtn">FIRE</div>
 
   <div class="overlay" id="startOverlay">
-    <h1 class="title">LAST <span>SIGNAL</span></h1>
+    <h1 class="title">VER<span>GE</span></h1>
     <div class="subtitle">a minimal battle royale</div>
     <div class="lobbyCardRow">
       <div class="lobbyCard" id="winTrackerBtn">
@@ -306,7 +317,7 @@
       <div class="lobbyCard" id="powerupsBtn">
         <div class="lobbyCardLabel">Power Ups</div>
         <div class="lobbyCardValue" id="loadoutCountLobby">0/3</div>
-        <div class="lobbyCardSub">Tap to equip</div>
+        <div class="lobbyCardSub" id="powerupsLobbySub">Tap to equip</div>
       </div>
       <div class="lobbyCard" id="rankBtn">
         <div class="lobbyCardLabel">Rank</div>
@@ -321,8 +332,8 @@
     <div class="hint">Desktop: WASD / Arrows to move, mouse to aim, click or Space to fire.<br>
     Mobile: left thumb to move. On the right, drag to aim and auto-fire, or tap the FIRE button to shoot in your current facing direction.<br>
     Everyone drops in lined up on the edge of the zone — you can't move until the 5-second countdown hits zero. Each player spawns already holding one random power-up, revealed to you as the countdown runs.<br>
-    Stay inside the cyan zone. Last signal standing wins.<br>
-    Casual: 1st +3 wins · 2nd +2 · 3rd +1 · 4th +0 · 5th and below lose wins.<br>
+    Stay inside the cyan zone. Last one standing wins.<br>
+    Casual: 1st +3 wins · 2nd +2 · 3rd +1 · 4th +0 · 5th and below lose wins. Every 10 wins (then every 20 past 50) earns a Power Box — open it for coins or a rare power-up, and spend coins to upgrade any power-up up to 5 times.<br>
     Ranked: climb Bronze → Silver → Gold → Platinum → Diamond → Champion. Higher ranks face tougher bots, and rewards shrink each promotion.</div>
   </div>
 
@@ -365,6 +376,9 @@
 
   <div class="overlay hidden" id="powerupsOverlay">
     <div class="subtitle">CHOOSE 3 POWER-UPS</div>
+    <div id="puCurrency">Coins: 0    Boxes: 0</div>
+    <button class="playbtn" id="puOpenBoxBtn">No Boxes</button>
+    <div id="boxResult">—</div>
     <div id="puSelectedCount">0 / 3 selected</div>
     <div id="puGrid"></div>
     <button class="playbtn secondary" id="puBackBtn">Back</button>
@@ -429,29 +443,64 @@
   const startCountdownNum = document.getElementById('startCountdownNum');
 
   // ---------- Power-ups ----------
-  // Base pool of 12 — every match, bots always draw randomly from just these.
+  // Base pool of 12 — always unlocked, bots always draw randomly from just these at level 0.
+  // Each type's apply(e, level) scales its effect with upgrade level (0-5), bought with coins.
   const POWERUP_TYPES = [
-    { key:'speed',       label:'ADRENALINE',   color:'#4FD8EA', desc:'+18% movement speed', apply(e){ e.speed *= 1.18; } },
-    { key:'vitality',    label:'VITALITY',     color:'#F5A623', desc:'+25 max HP, heals you now', apply(e){ e.maxHp += 25; e.hp = Math.min(e.maxHp, e.hp+25); } },
-    { key:'regen',       label:'STIMPACK',     color:'#7CF29C', desc:'Regenerates 1.5 HP per second', apply(e){ e.regen = (e.regen||0) + 1.5; } },
-    { key:'rapidfire',   label:'OVERCLOCK',    color:'#F5D423', desc:'Fires 28% faster', apply(e){ e.fireCdMult = (e.fireCdMult||1) * 0.72; } },
-    { key:'heavyrounds', label:'HEAVY ROUNDS', color:'#FF7A45', desc:'+40% bullet damage', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.4; } },
-    { key:'armor',       label:'KEVLAR',       color:'#8C7BFF', desc:'-25% damage taken', apply(e){ e.armor = Math.min(0.6, (e.armor||0) + 0.25); } },
-    { key:'velocity',    label:'VELOCITY',     color:'#4FE8D8', desc:'+30% bullet speed', apply(e){ e.bulletSpeedMult = (e.bulletSpeedMult||1) * 1.3; } },
-    { key:'secondwind',  label:'SECOND WIND',  color:'#FF4655', desc:'Full heal, blocks your next hit', apply(e){ e.hp = e.maxHp; e.shield = true; } },
-    { key:'phantom',     label:'PHANTOM',      color:'#B8E8FF', desc:'Smaller hitbox, +10% speed', apply(e){ e.radius = Math.max(10, e.radius-3); e.speed *= 1.10; } },
-    { key:'juggernaut',  label:'JUGGERNAUT',   color:'#D9A441', desc:'+40 max HP, but -10% speed', apply(e){ e.maxHp += 40; e.hp = Math.min(e.maxHp, e.hp+40); e.speed *= 0.9; } },
-    { key:'marksman',    label:'MARKSMAN',     color:'#C9F24F', desc:'+25% damage and bullet speed', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.25; e.bulletSpeedMult = (e.bulletSpeedMult||1) * 1.25; } },
-    { key:'berserker',   label:'BERSERKER',    color:'#FF2E63', desc:'Fires 20% faster, but -15% damage resistance', apply(e){ e.fireCdMult = (e.fireCdMult||1) * 0.8; e.armor = (e.armor||0) - 0.15; } }
+    { key:'speed',       label:'ADRENALINE',   color:'#4FD8EA',
+      desc(l){ return `+${18+l}% movement speed`; },
+      apply(e,l){ e.speed *= 1 + (18+l)/100; } },
+    { key:'vitality',    label:'VITALITY',     color:'#F5A623',
+      desc(l){ return `+${25+l*5} max HP, heals you now`; },
+      apply(e,l){ const v=25+l*5; e.maxHp += v; e.hp = Math.min(e.maxHp, e.hp+v); } },
+    { key:'regen',       label:'STIMPACK',     color:'#7CF29C',
+      desc(l){ return `Regenerates ${(1.5+l*0.3).toFixed(1)} HP per second`; },
+      apply(e,l){ e.regen = (e.regen||0) + (1.5+l*0.3); } },
+    { key:'rapidfire',   label:'OVERCLOCK',    color:'#F5D423',
+      desc(l){ return `Fires ${Math.round((1-(0.72-l*0.02))*100)}% faster`; },
+      apply(e,l){ e.fireCdMult = (e.fireCdMult||1) * Math.max(0.5, 0.72-l*0.02); } },
+    { key:'heavyrounds', label:'HEAVY ROUNDS', color:'#FF7A45',
+      desc(l){ return `+${Math.round((0.4+l*0.03)*100)}% bullet damage`; },
+      apply(e,l){ e.dmgMult = (e.dmgMult||1) * (1.4+l*0.03); } },
+    { key:'armor',       label:'KEVLAR',       color:'#8C7BFF',
+      desc(l){ return `-${Math.round((0.25+l*0.02)*100)}% damage taken`; },
+      apply(e,l){ e.armor = Math.min(0.6, (e.armor||0) + (0.25+l*0.02)); } },
+    { key:'velocity',    label:'VELOCITY',     color:'#4FE8D8',
+      desc(l){ return `+${Math.round((0.3+l*0.02)*100)}% bullet speed`; },
+      apply(e,l){ e.bulletSpeedMult = (e.bulletSpeedMult||1) * (1.3+l*0.02); } },
+    { key:'secondwind',  label:'SECOND WIND',  color:'#FF4655',
+      desc(l){ return `Full heal, blocks your next hit${l>0?`, +${l*5} max HP`:''}`; },
+      apply(e,l){ e.hp = e.maxHp; e.shield = true; if(l>0){ e.maxHp += l*5; e.hp = e.maxHp; } } },
+    { key:'phantom',     label:'PHANTOM',      color:'#B8E8FF',
+      desc(l){ return `Smaller hitbox, +${10+l}% speed`; },
+      apply(e,l){ e.radius = Math.max(9, e.radius-3-l*0.4); e.speed *= 1 + (10+l)/100; } },
+    { key:'juggernaut',  label:'JUGGERNAUT',   color:'#D9A441',
+      desc(l){ return `+${40+l*8} max HP, but -${Math.max(0,10-l)}% speed`; },
+      apply(e,l){ const v=40+l*8; e.maxHp += v; e.hp = Math.min(e.maxHp, e.hp+v); e.speed *= (1 - Math.max(0,10-l)/100); } },
+    { key:'marksman',    label:'MARKSMAN',     color:'#C9F24F',
+      desc(l){ return `+${25+l*2}% damage and bullet speed`; },
+      apply(e,l){ e.dmgMult = (e.dmgMult||1) * (1.25+l*0.02); e.bulletSpeedMult = (e.bulletSpeedMult||1) * (1.25+l*0.02); } },
+    { key:'berserker',   label:'BERSERKER',    color:'#FF2E63',
+      desc(l){ return `Fires ${20+l*2}% faster, but -${Math.max(0,15-l)}% damage resistance`; },
+      apply(e,l){ e.fireCdMult = (e.fireCdMult||1) * (0.8-l*0.02); e.armor = (e.armor||0) - Math.max(0,0.15-l*0.01); } }
   ];
 
-  // Reward power-ups — unlocked one at a time every 10 wins, only available to you (never bots), for your loadout screen.
+  // Reward power-ups — earned only by opening Power Boxes (never automatically unlocked, never given to bots).
   const REWARD_POWERUP_TYPES = [
-    { key:'overdrive',     label:'OVERDRIVE',      color:'#FF9F1C', unlockAt:10, desc:'+30% speed, fires 15% faster', apply(e){ e.speed *= 1.3; e.fireCdMult = (e.fireCdMult||1) * 0.85; } },
-    { key:'titanshell',    label:'TITAN SHELL',    color:'#5C7AEA', unlockAt:20, desc:'+50 max HP, +15% damage reduction', apply(e){ e.maxHp += 50; e.hp = Math.min(e.maxHp, e.hp+50); e.armor = (e.armor||0) + 0.15; } },
-    { key:'deadeye',       label:'DEADEYE',        color:'#E63946', unlockAt:30, desc:'+60% bullet damage', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.6; } },
-    { key:'nanoweave',     label:'NANO WEAVE',     color:'#2EC4B6', unlockAt:40, desc:'Regenerates 3 HP/sec, +10% damage reduction', apply(e){ e.regen = (e.regen||0) + 3; e.armor = (e.armor||0) + 0.1; } },
-    { key:'apexpredator',  label:'APEX PREDATOR',  color:'#FFD60A', unlockAt:50, desc:'Shield, +30% damage, +15% speed', apply(e){ e.shield = true; e.dmgMult = (e.dmgMult||1) * 1.3; e.speed *= 1.15; } }
+    { key:'overdrive',     label:'OVERDRIVE',      color:'#FF9F1C',
+      desc(l){ return `+${30+l*2}% speed, fires ${Math.round((1-(0.85-l*0.01))*100)}% faster`; },
+      apply(e,l){ e.speed *= 1 + (30+l*2)/100; e.fireCdMult = (e.fireCdMult||1) * Math.max(0.6, 0.85-l*0.01); } },
+    { key:'titanshell',    label:'TITAN SHELL',    color:'#5C7AEA',
+      desc(l){ return `+${50+l*8} max HP, +${Math.round((0.15+l*0.01)*100)}% damage reduction`; },
+      apply(e,l){ const v=50+l*8; e.maxHp += v; e.hp = Math.min(e.maxHp, e.hp+v); e.armor = (e.armor||0) + (0.15+l*0.01); } },
+    { key:'deadeye',       label:'DEADEYE',        color:'#E63946',
+      desc(l){ return `+${Math.round((0.6+l*0.04)*100)}% bullet damage`; },
+      apply(e,l){ e.dmgMult = (e.dmgMult||1) * (1.6+l*0.04); } },
+    { key:'nanoweave',     label:'NANO WEAVE',     color:'#2EC4B6',
+      desc(l){ return `Regenerates ${(3+l*0.4).toFixed(1)} HP/sec, +${Math.round((0.1+l*0.01)*100)}% damage reduction`; },
+      apply(e,l){ e.regen = (e.regen||0) + (3+l*0.4); e.armor = (e.armor||0) + (0.1+l*0.01); } },
+    { key:'apexpredator',  label:'APEX PREDATOR',  color:'#FFD60A',
+      desc(l){ return `Shield, +${Math.round((0.3+l*0.02)*100)}% damage, +${Math.round((0.15+l*0.01)*100)}% speed`; },
+      apply(e,l){ e.shield = true; e.dmgMult = (e.dmgMult||1) * (1.3+l*0.02); e.speed *= 1 + (0.15+l*0.01); } }
   ];
 
   const ALL_POWERUP_TYPES = POWERUP_TYPES.concat(REWARD_POWERUP_TYPES);
@@ -459,13 +508,18 @@
   function assignRandomPowerup(e, pool){
     const list = pool || POWERUP_TYPES;
     const type = list[Math.floor(Math.random()*list.length)];
-    type.apply(e);
+    type.apply(e, 0); // bots always use base (level 0) effects
     e.powerup = type;
   }
 
   function assignPlayerPowerup(e){
     const loadout = getValidLoadout();
-    assignRandomPowerup(e, loadout.length === 3 ? loadout : POWERUP_TYPES);
+    const pool = loadout.length === 3 ? loadout : POWERUP_TYPES;
+    const type = pool[Math.floor(Math.random()*pool.length)];
+    const level = getUpgradeLevel(type.key);
+    type.apply(e, level);
+    e.powerup = type;
+    e.powerupLevel = level;
   }
 
   // ---------- Wins tracker ----------
@@ -487,6 +541,124 @@
     document.getElementById('winsCount').textContent = getWins();
   }
 
+  // ---------- Win-milestone rewards: Power Boxes ----------
+  // Every 10 wins up to 50, then every 20 wins after that, you earn a Power Box.
+  const COINS_KEY = 'lastSignalCoins';
+  const BOXES_KEY = 'lastSignalBoxes';
+  const CLAIMED_MILESTONES_KEY = 'lastSignalClaimedMilestones';
+  const UNLOCKED_REWARDS_KEY = 'lastSignalUnlockedRewards';
+  const UPGRADES_KEY = 'lastSignalUpgrades';
+
+  function milestoneList(n){
+    const list = [];
+    for(let i=0;i<n;i++){
+      list.push(i<5 ? (i+1)*10 : 50 + (i-4)*20);
+    }
+    return list;
+  }
+  function milestoneCountForWins(wins){
+    let count = 0;
+    for(const m of [10,20,30,40,50]){ if(wins>=m) count++; }
+    if(wins>50){ count += Math.floor((wins-50)/20); }
+    return count;
+  }
+  function getCoins(){
+    const v = parseInt(localStorage.getItem(COINS_KEY), 10);
+    return Number.isFinite(v) ? v : 0;
+  }
+  function addCoins(n){
+    localStorage.setItem(COINS_KEY, String(getCoins()+n));
+  }
+  function spendCoins(n){
+    const cur = getCoins();
+    if(cur < n) return false;
+    localStorage.setItem(COINS_KEY, String(cur-n));
+    return true;
+  }
+  function getBoxes(){
+    const v = parseInt(localStorage.getItem(BOXES_KEY), 10);
+    return Number.isFinite(v) ? v : 0;
+  }
+  function addBoxes(n){
+    localStorage.setItem(BOXES_KEY, String(getBoxes()+n));
+  }
+  function takeBox(){
+    const cur = getBoxes();
+    if(cur <= 0) return false;
+    localStorage.setItem(BOXES_KEY, String(cur-1));
+    return true;
+  }
+  function getClaimedMilestones(){
+    const v = parseInt(localStorage.getItem(CLAIMED_MILESTONES_KEY), 10);
+    return Number.isFinite(v) ? v : 0;
+  }
+  function checkAndAwardBoxes(){
+    const wins = getWins();
+    const newCount = milestoneCountForWins(wins);
+    const claimed = getClaimedMilestones();
+    if(newCount > claimed){
+      const gained = newCount - claimed;
+      addBoxes(gained);
+      localStorage.setItem(CLAIMED_MILESTONES_KEY, String(newCount));
+      return gained;
+    }
+    return 0;
+  }
+  function getUnlockedRewardKeys(){
+    try{
+      const v = JSON.parse(localStorage.getItem(UNLOCKED_REWARDS_KEY));
+      return Array.isArray(v) ? v : [];
+    } catch(err){ return []; }
+  }
+  function isRewardUnlocked(key){
+    return getUnlockedRewardKeys().includes(key);
+  }
+  function unlockReward(key){
+    const keys = getUnlockedRewardKeys();
+    if(!keys.includes(key)){
+      keys.push(key);
+      localStorage.setItem(UNLOCKED_REWARDS_KEY, JSON.stringify(keys));
+    }
+  }
+  function openPowerBox(){
+    if(!takeBox()) return null;
+    const lockedRewards = REWARD_POWERUP_TYPES.filter(t => !isRewardUnlocked(t.key));
+    if(lockedRewards.length > 0 && Math.random() < 0.4){
+      const type = lockedRewards[Math.floor(Math.random()*lockedRewards.length)];
+      unlockReward(type.key);
+      return { kind:'powerup', powerup:type };
+    }
+    const coins = Math.floor(rand(20,60));
+    addCoins(coins);
+    return { kind:'coins', amount:coins };
+  }
+
+  // ---------- Upgrades (spend coins to boost a power-up's effect, max level 5) ----------
+  const MAX_UPGRADE_LEVEL = 5;
+  function getUpgrades(){
+    try{
+      const v = JSON.parse(localStorage.getItem(UPGRADES_KEY));
+      return v && typeof v === 'object' ? v : {};
+    } catch(err){ return {}; }
+  }
+  function getUpgradeLevel(key){
+    const upgrades = getUpgrades();
+    return clamp(upgrades[key]||0, 0, MAX_UPGRADE_LEVEL);
+  }
+  function upgradeCost(currentLevel){
+    return Math.round(50 * Math.pow(1.5, currentLevel));
+  }
+  function buyUpgrade(key){
+    const level = getUpgradeLevel(key);
+    if(level >= MAX_UPGRADE_LEVEL) return false;
+    const cost = upgradeCost(level);
+    if(!spendCoins(cost)) return false;
+    const upgrades = getUpgrades();
+    upgrades[key] = level+1;
+    localStorage.setItem(UPGRADES_KEY, JSON.stringify(upgrades));
+    return true;
+  }
+
   // ---------- Loadout (choose-3 power-up equip) ----------
   const LOADOUT_KEY = 'lastSignalLoadout';
   function getLoadout(){
@@ -499,8 +671,7 @@
     localStorage.setItem(LOADOUT_KEY, JSON.stringify(keys));
   }
   function getUnlockedPool(){
-    const wins = getWins();
-    return ALL_POWERUP_TYPES.filter(t => wins >= (t.unlockAt||0));
+    return POWERUP_TYPES.concat(REWARD_POWERUP_TYPES.filter(t => isRewardUnlocked(t.key)));
   }
   function getValidLoadout(){
     const keys = getLoadout();
@@ -512,6 +683,7 @@
   function refreshLobbyExtras(){
     refreshWinsDisplay();
     document.getElementById('loadoutCountLobby').textContent = `${getValidLoadout().length}/3`;
+    document.getElementById('powerupsLobbySub').textContent = `${getBoxes()} box${getBoxes()===1?'':'es'} · ${getCoins()} coins`;
     const tier = getRankTier();
     const rankLobbyEl = document.getElementById('rankTierLobby');
     rankLobbyEl.textContent = RANK_TIERS[tier].label;
@@ -624,35 +796,36 @@
   // ---------- Win tracker screen ----------
   function renderWinTracker(){
     const wins = getWins();
-    const maxScale = REWARD_POWERUP_TYPES[REWARD_POWERUP_TYPES.length-1].unlockAt + 10;
+    const milestones = milestoneList(8); // 10,20,30,40,50,70,90,110
+    const maxScale = milestones[milestones.length-1];
     const pct = clamp(wins/maxScale, 0, 1) * 100;
     document.getElementById('wtBarFill').style.height = pct + '%';
     document.getElementById('wtTotal').innerHTML = `${wins}<span>wins</span>`;
 
     const track = document.getElementById('wtBarTrack');
     track.querySelectorAll('.wt-tick, .wt-tick-label').forEach(n=>n.remove());
-    REWARD_POWERUP_TYPES.forEach(rt=>{
-      const frac = rt.unlockAt / maxScale;
+    milestones.forEach(m=>{
+      const frac = m / maxScale;
       const tick = document.createElement('div');
       tick.className = 'wt-tick';
       tick.style.bottom = (frac*100) + '%';
       track.appendChild(tick);
 
       const label = document.createElement('div');
-      const unlocked = wins >= rt.unlockAt;
+      const unlocked = wins >= m;
       label.className = 'wt-tick-label' + (unlocked ? ' unlocked' : '');
       label.style.bottom = (frac*100) + '%';
-      label.textContent = `${rt.unlockAt} — ${rt.label}${unlocked ? ' ✓' : ''}`;
+      label.textContent = `${m} — POWER BOX${unlocked ? ' ✓' : ''}`;
       track.appendChild(label);
     });
 
-    const next = REWARD_POWERUP_TYPES.find(rt => wins < rt.unlockAt);
+    const next = milestones.find(m => wins < m);
     document.getElementById('wtNextReward').textContent = next
-      ? `${next.unlockAt - wins} more win${next.unlockAt-wins===1?'':'s'} to unlock ${next.label}`
-      : 'All reward power-ups unlocked';
+      ? `${next - wins} more win${next-wins===1?'':'s'} to earn a Power Box`
+      : 'Keep winning — a box arrives every 20 wins from here';
   }
 
-  // ---------- Power-up loadout screen ----------
+  // ---------- Power-up loadout + upgrade screen ----------
   function togglePowerupSelection(key){
     let loadout = getLoadout();
     if(loadout.includes(key)){
@@ -665,19 +838,71 @@
     renderPowerupsScreen();
   }
 
+  function handleOpenBox(){
+    const result = openPowerBox();
+    const resultEl = document.getElementById('boxResult');
+    if(!result){
+      resultEl.textContent = 'No boxes to open';
+    } else if(result.kind === 'coins'){
+      resultEl.textContent = `Box opened — +${result.amount} coins`;
+    } else {
+      resultEl.textContent = `Box opened — unlocked ${result.powerup.label}!`;
+    }
+    renderPowerupsScreen();
+  }
+
+  function handleBuyUpgrade(key){
+    const ok = buyUpgrade(key);
+    if(!ok){
+      document.getElementById('boxResult').textContent = 'Not enough coins';
+    } else {
+      document.getElementById('boxResult').textContent = 'Upgrade purchased!';
+    }
+    renderPowerupsScreen();
+  }
+
   function renderPowerupsScreen(){
-    const wins = getWins();
     const loadout = getLoadout();
+    const coins = getCoins();
+    const boxes = getBoxes();
+
+    document.getElementById('puCurrency').textContent = `Coins: ${coins}    Boxes: ${boxes}`;
+    const openBtn = document.getElementById('puOpenBoxBtn');
+    openBtn.disabled = boxes <= 0;
+    openBtn.textContent = boxes > 0 ? `Open Box (${boxes})` : 'No Boxes';
+
     const grid = document.getElementById('puGrid');
     grid.innerHTML = '';
     ALL_POWERUP_TYPES.forEach(type=>{
-      const unlocked = wins >= (type.unlockAt||0);
+      const unlocked = POWERUP_TYPES.includes(type) || isRewardUnlocked(type.key);
+      const level = getUpgradeLevel(type.key);
       const card = document.createElement('div');
       card.className = 'pu-card' + (!unlocked ? ' locked' : '') + (loadout.includes(type.key) ? ' selected' : '');
-      card.innerHTML = `<div class="pu-dot" style="background:${type.color}"></div>${type.label}` +
-        (!unlocked ? `<div class="pu-lockinfo">Unlocks @ ${type.unlockAt} wins</div>` : '');
-      if(unlocked){
-        card.addEventListener('click', ()=>togglePowerupSelection(type.key));
+
+      if(!unlocked){
+        card.innerHTML = `<div class="pu-dot" style="background:${type.color}"></div>${type.label}` +
+          `<div class="pu-lockinfo">Find in a Power Box</div>`;
+      } else {
+        const maxed = level >= MAX_UPGRADE_LEVEL;
+        const cost = upgradeCost(level);
+        card.innerHTML = `
+          <div class="pu-dot" style="background:${type.color}"></div>${type.label}
+          <div class="pu-lockinfo">${type.desc(level)}</div>
+          <div class="pu-level">Lv ${level}/${MAX_UPGRADE_LEVEL}</div>
+          <button class="pu-upgrade-btn" ${maxed ? 'disabled' : ''} data-key="${type.key}">
+            ${maxed ? 'MAX' : `Upgrade (${cost})`}
+          </button>`;
+        card.addEventListener('click', (ev)=>{
+          if(ev.target.classList.contains('pu-upgrade-btn')) return;
+          togglePowerupSelection(type.key);
+        });
+        const btn = card.querySelector('.pu-upgrade-btn');
+        if(!maxed){
+          btn.addEventListener('click', (ev)=>{
+            ev.stopPropagation();
+            handleBuyUpgrade(type.key);
+          });
+        }
       }
       grid.appendChild(card);
     });
@@ -765,13 +990,14 @@
     }
 
     entities.forEach(e=>{ if(e.isPlayer){ assignPlayerPowerup(e); } else { assignRandomPowerup(e); } });
-    document.getElementById('loadoutLabel').textContent = `LOADOUT // ${player.powerup.label}`;
+    const lvlTag = player.powerupLevel > 0 ? ` (Lv${player.powerupLevel})` : '';
+    document.getElementById('loadoutLabel').textContent = `LOADOUT // ${player.powerup.label}${lvlTag}`;
     document.getElementById('loadoutLabel').style.color = player.powerup.color;
 
     document.getElementById('powerupRevealDot').style.background = player.powerup.color;
-    document.getElementById('powerupRevealLabel').textContent = player.powerup.label;
+    document.getElementById('powerupRevealLabel').textContent = player.powerup.label + lvlTag;
     document.getElementById('powerupRevealLabel').style.color = player.powerup.color;
-    document.getElementById('powerupRevealDesc').textContent = player.powerup.desc;
+    document.getElementById('powerupRevealDesc').textContent = player.powerup.desc(player.powerupLevel);
 
     gameOver = false;
     endSequenceStarted = false;
@@ -1147,7 +1373,7 @@
     // HUD
     document.getElementById('aliveCount').textContent = stillAlive.length;
     document.getElementById('healthFill').style.width = clamp(player.hp/player.maxHp*100,0,100)+'%';
-    document.getElementById('healthLabel').textContent = `SIGNAL // HP ${Math.round(clamp(player.hp,0,player.maxHp))}/${player.maxHp}`;
+    document.getElementById('healthLabel').textContent = `VERGE // HP ${Math.round(clamp(player.hp,0,player.maxHp))}/${player.maxHp}`;
     if(preGame){
       document.getElementById('stormCount').textContent = 'LOOTING';
     } else if(stormPhase < STORM_PHASES.length){
@@ -1314,7 +1540,7 @@
     gameOver = true;
     gameRunning = false;
     const el = document.getElementById('endOverlay');
-    document.getElementById('resultText').textContent = won ? '#1 — Signal Standing' : 'Signal Lost';
+    document.getElementById('resultText').textContent = won ? '#1 — Last One Standing' : 'Eliminated';
     document.getElementById('resultText').className = 'bigresult ' + (won ? 'win':'lose');
     const survived = ((performance.now()-startTime)/1000).toFixed(0);
     const placeLabel = place === 1 ? '1st' : place === 2 ? '2nd' : place === 3 ? '3rd' : (place + 'th');
@@ -1358,7 +1584,8 @@
       const after = setWins(before + delta);
       winsDeltaEl.textContent = (delta > 0 ? '+' : '') + delta + ' WINS';
       winsDeltaEl.className = delta > 0 ? 'pos' : (delta < 0 ? 'neg' : 'zero');
-      winsTotalEl.textContent = `Total wins: ${after}`;
+      const boxesGained = checkAndAwardBoxes();
+      winsTotalEl.textContent = `Total wins: ${after}` + (boxesGained > 0 ? `  //  +${boxesGained} Power Box${boxesGained>1?'es':''}!` : '');
     }
 
     refreshWinsDisplay();
@@ -1394,9 +1621,11 @@
 
   document.getElementById('powerupsBtn').addEventListener('click', ()=>{
     document.getElementById('startOverlay').classList.add('hidden');
+    document.getElementById('boxResult').textContent = '—';
     renderPowerupsScreen();
     document.getElementById('powerupsOverlay').classList.remove('hidden');
   });
+  document.getElementById('puOpenBoxBtn').addEventListener('click', handleOpenBox);
   document.getElementById('puBackBtn').addEventListener('click', ()=>{
     document.getElementById('powerupsOverlay').classList.add('hidden');
     document.getElementById('startOverlay').classList.remove('hidden');
