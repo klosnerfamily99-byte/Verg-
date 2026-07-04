@@ -67,6 +67,9 @@
     transition: width .15s linear;
   }
   #healthLabel{ font-size:10px; color:var(--dim); margin-bottom:4px; letter-spacing:2px;}
+  #loadoutLabel{
+    font-size:10px; color:var(--amber); margin-top:6px; letter-spacing:2px; text-transform:uppercase;
+  }
 
   /* ---- Kill feed ---- */
   #feed{
@@ -206,6 +209,7 @@
   <div id="healthWrap">
     <div id="healthLabel">SIGNAL // HP</div>
     <div id="healthBar"><div id="healthFill"></div></div>
+    <div id="loadoutLabel">LOADOUT // —</div>
   </div>
 
   <div id="joyZone"><div id="joyBase"><div id="joyStick"></div></div></div>
@@ -223,7 +227,7 @@
     <button class="playbtn" id="startBtn">Drop In</button>
     <div class="hint">Desktop: WASD / Arrows to move, mouse to aim, click or Space to fire.<br>
     Mobile: left thumb to move. On the right, drag to aim and auto-fire, or tap the FIRE button to shoot in your current facing direction.<br>
-    Each match opens with a 5-second countdown — weapons are locked while you scramble for one of 8 power-ups scattered around the drop zone.<br>
+    Everyone drops in lined up on the edge of the zone — you can't move until the 5-second countdown hits zero. Each player spawns already holding one random power-up out of 12.<br>
     Stay inside the cyan zone. Last signal standing wins.<br>
     1st +3 wins · 2nd +2 · 3rd +1 · 4th +0 · 5th and below lose wins.</div>
   </div>
@@ -296,7 +300,7 @@
   const startCountdownNum = document.getElementById('startCountdownNum');
 
   // ---------- Power-ups ----------
-  let powerups = [];
+  // Each entity spawns already holding one random power-up from this pool of 12 — no pickups on the map.
   const POWERUP_TYPES = [
     { key:'speed',       label:'ADRENALINE',   color:'#4FD8EA', apply(e){ e.speed *= 1.18; } },
     { key:'vitality',    label:'VITALITY',     color:'#F5A623', apply(e){ e.maxHp += 25; e.hp = Math.min(e.maxHp, e.hp+25); } },
@@ -305,24 +309,17 @@
     { key:'heavyrounds', label:'HEAVY ROUNDS', color:'#FF7A45', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.4; } },
     { key:'armor',       label:'KEVLAR',       color:'#8C7BFF', apply(e){ e.armor = Math.min(0.6, (e.armor||0) + 0.25); } },
     { key:'velocity',    label:'VELOCITY',     color:'#4FE8D8', apply(e){ e.bulletSpeedMult = (e.bulletSpeedMult||1) * 1.3; } },
-    { key:'secondwind',  label:'SECOND WIND',  color:'#FF4655', apply(e){ e.hp = e.maxHp; e.shield = true; } }
+    { key:'secondwind',  label:'SECOND WIND',  color:'#FF4655', apply(e){ e.hp = e.maxHp; e.shield = true; } },
+    { key:'phantom',     label:'PHANTOM',      color:'#B8E8FF', apply(e){ e.radius = Math.max(10, e.radius-3); e.speed *= 1.10; } },
+    { key:'juggernaut',  label:'JUGGERNAUT',   color:'#D9A441', apply(e){ e.maxHp += 40; e.hp = Math.min(e.maxHp, e.hp+40); e.speed *= 0.9; } },
+    { key:'marksman',    label:'MARKSMAN',     color:'#C9F24F', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.25; e.bulletSpeedMult = (e.bulletSpeedMult||1) * 1.25; } },
+    { key:'berserker',   label:'BERSERKER',    color:'#FF2E63', apply(e){ e.fireCdMult = (e.fireCdMult||1) * 0.8; e.armor = (e.armor||0) - 0.15; } }
   ];
 
-  function spawnPowerups(count){
-    powerups = [];
-    for(let i=0;i<count;i++){
-      const type = POWERUP_TYPES[i % POWERUP_TYPES.length];
-      const angle = rand(0, Math.PI*2);
-      const r = rand(80, stormRadius*0.8);
-      powerups.push({
-        id: Math.random().toString(36).slice(2),
-        type: type,
-        x: stormCenter.x + Math.cos(angle)*r,
-        y: stormCenter.y + Math.sin(angle)*r,
-        taken:false,
-        bob: rand(0, Math.PI*2)
-      });
-    }
+  function assignRandomPowerup(e){
+    const type = POWERUP_TYPES[Math.floor(Math.random()*POWERUP_TYPES.length)];
+    type.apply(e);
+    e.powerup = type;
   }
 
   // ---------- Wins tracker ----------
@@ -360,16 +357,13 @@
 
   // ---------- Entity factory ----------
   function makeEntity(isPlayer, name){
-    const angle = rand(0, Math.PI*2);
-    const r = rand(0, stormRadius*0.85);
     return {
       id: Math.random().toString(36).slice(2),
       name: name,
       isPlayer: isPlayer,
-      x: stormCenter.x + Math.cos(angle)*r,
-      y: stormCenter.y + Math.sin(angle)*r,
+      x: 0, y: 0,
       vx:0, vy:0,
-      facing: rand(0,Math.PI*2),
+      facing: 0,
       hp: 100, maxHp:100,
       speed: isPlayer ? 210 : rand(150,190),
       radius: 16,
@@ -378,8 +372,23 @@
       aiState: 'roam',
       aiTimer: rand(0.5,2),
       aiTarget: null,
-      hitFlash: 0
+      hitFlash: 0,
+      powerup: null
     };
+  }
+
+  function placeOnRing(list){
+    // Everyone lines up right on the edge of the starting safe zone, evenly spaced with slight jitter.
+    const n = list.length;
+    const step = (Math.PI*2) / n;
+    const offset = rand(0, Math.PI*2);
+    list.forEach((e, i)=>{
+      const angle = offset + i*step + rand(-step*0.15, step*0.15);
+      const r = stormRadius - 6;
+      e.x = stormCenter.x + Math.cos(angle)*r;
+      e.y = stormCenter.y + Math.sin(angle)*r;
+      e.facing = angle + Math.PI; // face inward, toward the zone
+    });
   }
 
   function spawnMatch(botCount){
@@ -403,6 +412,12 @@
     for(let i=0;i<botCount;i++){
       entities.push(makeEntity(false, names[i % names.length] + (i>=names.length ? ('-'+i) : '')));
     }
+
+    placeOnRing(entities);
+    entities.forEach(assignRandomPowerup);
+    document.getElementById('loadoutLabel').textContent = `LOADOUT // ${player.powerup.label}`;
+    document.getElementById('loadoutLabel').style.color = player.powerup.color;
+
     gameOver = false;
     endSequenceStarted = false;
     startTime = performance.now();
@@ -411,7 +426,6 @@
     preGameTimer = PREGAME_DURATION;
     startCountdownNum.textContent = Math.ceil(preGameTimer);
     startCountdownEl.classList.remove('hidden');
-    spawnPowerups(8);
   }
 
   // ---------- Input ----------
@@ -590,28 +604,8 @@
     e.aiTimer -= dt;
 
     if(preGame){
-      // scramble for the nearest unclaimed power-up; no aggro, no shooting
-      let target = null, td = Infinity;
-      for(const pu of powerups){
-        if(pu.taken) continue;
-        const d = dist(e,pu);
-        if(d < td){ td = d; target = pu; }
-      }
-      if(target){
-        const a = Math.atan2(target.y-e.y, target.x-e.x);
-        e.vx = Math.cos(a)*e.speed; e.vy = Math.sin(a)*e.speed;
-        e.facing = a;
-      } else {
-        if(e.aiTimer <= 0){
-          e.aiTarget = { x: e.x + rand(-300,300), y: e.y + rand(-300,300) };
-          e.aiTimer = rand(1.5,3);
-        }
-        if(e.aiTarget){
-          const a = Math.atan2(e.aiTarget.y-e.y, e.aiTarget.x-e.x);
-          e.vx = Math.cos(a)*e.speed*0.6; e.vy = Math.sin(a)*e.speed*0.6;
-          e.facing = a;
-        }
-      }
+      // frozen at the drop line until the countdown ends
+      e.vx = 0; e.vy = 0;
       return;
     }
 
@@ -663,7 +657,7 @@
   function update(dt){
     if(!gameRunning || gameOver) return;
 
-    // pre-game countdown: movement allowed, combat + storm locked
+    // pre-game countdown: everyone frozen on the drop line, weapons + storm locked
     if(preGame){
       preGameTimer -= dt;
       if(preGameTimer <= 0){
@@ -707,26 +701,30 @@
 
     // player input
     if(player.alive){
-      let mx = 0, my = 0;
-      if(keys['w']||keys['arrowup']) my -= 1;
-      if(keys['s']||keys['arrowdown']) my += 1;
-      if(keys['a']||keys['arrowleft']) mx -= 1;
-      if(keys['d']||keys['arrowright']) mx += 1;
-      if(joyActive){ mx = joyVec.x; my = joyVec.y; }
-      const mlen = Math.hypot(mx,my);
-      if(mlen > 0.05){
-        player.vx = (mx/Math.max(mlen,1))*player.speed;
-        player.vy = (my/Math.max(mlen,1))*player.speed;
-        if(!mouse.down && !aimActive) player.facing = Math.atan2(my,mx);
-      } else {
+      if(preGame){
         player.vx = 0; player.vy = 0;
-      }
-      // aim priority: right-side drag stick (touch) > mouse (desktop)
-      if(aimActive && aimAngle !== null){
-        player.facing = aimAngle;
-      } else if(!('ontouchstart' in window)){
-        const wx = mouse.x + camera.x, wy = mouse.y + camera.y;
-        player.facing = Math.atan2(wy-player.y, wx-player.x);
+      } else {
+        let mx = 0, my = 0;
+        if(keys['w']||keys['arrowup']) my -= 1;
+        if(keys['s']||keys['arrowdown']) my += 1;
+        if(keys['a']||keys['arrowleft']) mx -= 1;
+        if(keys['d']||keys['arrowright']) mx += 1;
+        if(joyActive){ mx = joyVec.x; my = joyVec.y; }
+        const mlen = Math.hypot(mx,my);
+        if(mlen > 0.05){
+          player.vx = (mx/Math.max(mlen,1))*player.speed;
+          player.vy = (my/Math.max(mlen,1))*player.speed;
+          if(!mouse.down && !aimActive) player.facing = Math.atan2(my,mx);
+        } else {
+          player.vx = 0; player.vy = 0;
+        }
+        // aim priority: right-side drag stick (touch) > mouse (desktop)
+        if(aimActive && aimAngle !== null){
+          player.facing = aimAngle;
+        } else if(!('ontouchstart' in window)){
+          const wx = mouse.x + camera.x, wy = mouse.y + camera.y;
+          player.facing = Math.atan2(wy-player.y, wx-player.x);
+        }
       }
       player.fireCooldown -= dt;
       if(!preGame && fireHeld && player.fireCooldown <= 0){
@@ -741,22 +739,13 @@
       updateBotAI(e, dt, alive);
     }
 
-    // move + storm damage + power-up pickup
+    // move + storm damage
     for(const e of alive){
       e.x += e.vx*dt; e.y += e.vy*dt;
       e.x = clamp(e.x, 20, WORLD.w-20);
       e.y = clamp(e.y, 20, WORLD.h-20);
       if(e.hitFlash>0) e.hitFlash -= dt;
       if(e.regen){ e.hp = Math.min(e.maxHp, e.hp + e.regen*dt); }
-
-      for(const pu of powerups){
-        if(pu.taken) continue;
-        if(dist(e,pu) < e.radius + 16){
-          pu.taken = true;
-          pu.type.apply(e);
-          addFeed(`${e.name} grabbed ${pu.type.label}`, false);
-        }
-      }
 
       if(!preGame){
         const dToCenter = dist(e, stormCenter);
@@ -765,7 +754,6 @@
         }
       }
     }
-    powerups = powerups.filter(p=>!p.taken);
 
     // bullets
     for(const b of bullets){
@@ -873,28 +861,6 @@
     }
     ctx.globalAlpha = 1;
 
-    // power-ups
-    const pulse = 1 + Math.sin(performance.now()/260)*0.15;
-    for(const pu of powerups){
-      if(pu.taken) continue;
-      ctx.save();
-      ctx.translate(pu.x, pu.y);
-      ctx.rotate(Math.PI/4);
-      const s = 11*pulse;
-      ctx.fillStyle = pu.type.color;
-      ctx.globalAlpha = 0.85;
-      ctx.fillRect(-s,-s,s*2,s*2);
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = '#0B0F12';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(-s,-s,s*2,s*2);
-      ctx.restore();
-      ctx.font = '10px "Courier New", monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = pu.type.color;
-      ctx.fillText(pu.type.label, pu.x, pu.y - 24);
-    }
-
     // bullets
     ctx.fillStyle = '#F5A623';
     for(const b of bullets){
@@ -963,11 +929,6 @@
     ctx.strokeStyle = '#4FD8EA';
     ctx.lineWidth = 1;
     ctx.stroke();
-    for(const pu of powerups){
-      if(pu.taken) continue;
-      ctx.fillStyle = pu.type.color;
-      ctx.fillRect(mx+pu.x*scale-1.5, my+pu.y*scale-1.5, 3, 3);
-    }
     for(const e of entities){
       if(!e.alive) continue;
       ctx.fillStyle = e.isPlayer ? '#4FD8EA' : '#FF4655';
