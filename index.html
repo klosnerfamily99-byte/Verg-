@@ -170,15 +170,19 @@
   }
   button.playbtn.secondary:active{ background:rgba(123,138,147,0.15); }
   .hint{ margin-top:22px; color:var(--dim); font-size:11px; letter-spacing:1px; max-width:320px; line-height:1.6;}
-  #winsBlock{
-    margin-bottom:28px; text-align:center;
+
+  .lobbyCardRow{ display:flex; gap:10px; margin-bottom:26px; }
+  .lobbyCard{
+    border:1px solid var(--grid); padding:14px 20px; min-width:130px;
+    text-align:center; cursor:pointer; transition:border-color .15s, background .15s;
   }
-  #winsLabel{
-    font-size:11px; letter-spacing:4px; color:var(--dim); text-transform:uppercase; margin-bottom:4px;
+  .lobbyCard:active{ border-color:var(--amber); background:rgba(245,166,35,0.08); }
+  .lobbyCardLabel{
+    font-size:10px; letter-spacing:3px; color:var(--dim); text-transform:uppercase; margin-bottom:6px;
   }
-  #winsCount{
-    font-size:34px; color:var(--amber); letter-spacing:2px;
-  }
+  .lobbyCardValue{ font-size:28px; color:var(--amber); letter-spacing:1px; }
+  .lobbyCardSub{ font-size:9px; color:var(--dim); margin-top:5px; letter-spacing:1px; text-transform:uppercase; }
+
   #winsDelta{
     font-size:13px; letter-spacing:2px; margin-bottom:6px; text-transform:uppercase;
   }
@@ -188,6 +192,45 @@
   #winsTotalEnd{
     font-size:12px; color:var(--dim); letter-spacing:1px; margin-bottom:20px;
   }
+
+  /* ---- Win tracker screen ---- */
+  #wtTotal{ font-size:40px; color:var(--amber); margin-bottom:20px; letter-spacing:1px; }
+  #wtTotal span{ font-size:12px; color:var(--dim); letter-spacing:2px; margin-left:8px; text-transform:uppercase; }
+  #wtBarWrap{ height:min(48vh,380px); width:64px; margin-bottom:24px; position:relative; }
+  #wtBarTrack{
+    position:relative; width:100%; height:100%;
+    border:1px solid var(--grid); background:rgba(255,255,255,0.02); overflow:visible;
+  }
+  #wtBarFill{
+    position:absolute; bottom:0; left:0; width:100%; height:0%;
+    background:linear-gradient(to top, var(--amber), #ffe3a8);
+    transition:height .6s ease;
+  }
+  .wt-tick{ position:absolute; left:0; right:0; height:1px; background:var(--dim); opacity:0.6; }
+  .wt-tick-label{
+    position:absolute; left:calc(100% + 12px); white-space:nowrap; font-size:10px;
+    letter-spacing:1px; color:var(--dim); transform:translateY(-50%); text-transform:uppercase;
+  }
+  .wt-tick-label.unlocked{ color:var(--amber); }
+  #wtNextReward{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-bottom:26px; text-transform:uppercase; max-width:280px; }
+
+  /* ---- Power-up loadout screen ---- */
+  #powerupsOverlay{ overflow-y:auto; padding-top:calc(30px + env(safe-area-inset-top)); padding-bottom:30px; }
+  #puSelectedCount{ font-size:12px; color:var(--dim); letter-spacing:2px; margin-bottom:16px; text-transform:uppercase; }
+  #puGrid{
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;
+    max-width:360px; width:100%; margin-bottom:26px;
+  }
+  .pu-card{
+    border:1px solid var(--grid); padding:10px 4px; text-align:center;
+    font-size:9px; letter-spacing:0.5px; text-transform:uppercase; cursor:pointer;
+    min-height:70px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transition:border-color .15s, background .15s;
+  }
+  .pu-card.selected{ background:rgba(245,166,35,0.14); border-color:var(--amber); }
+  .pu-card.locked{ opacity:0.35; cursor:not-allowed; }
+  .pu-dot{ width:14px; height:14px; border-radius:50%; margin-bottom:6px; }
+  .pu-lockinfo{ font-size:8px; color:var(--dim); margin-top:4px; letter-spacing:0.5px; }
 </style>
 </head>
 <body>
@@ -220,9 +263,16 @@
   <div class="overlay" id="startOverlay">
     <h1 class="title">LAST <span>SIGNAL</span></h1>
     <div class="subtitle">a minimal battle royale</div>
-    <div id="winsBlock">
-      <div id="winsLabel">Wins</div>
-      <div id="winsCount">0</div>
+    <div class="lobbyCardRow">
+      <div class="lobbyCard" id="winTrackerBtn">
+        <div class="lobbyCardLabel">Win Tracker</div>
+        <div class="lobbyCardValue" id="winsCount">0</div>
+      </div>
+      <div class="lobbyCard" id="powerupsBtn">
+        <div class="lobbyCardLabel">Power Ups</div>
+        <div class="lobbyCardValue" id="loadoutCountLobby">0/3</div>
+        <div class="lobbyCardSub">Tap to equip</div>
+      </div>
     </div>
     <button class="playbtn" id="startBtn">Drop In</button>
     <div class="hint">Desktop: WASD / Arrows to move, mouse to aim, click or Space to fire.<br>
@@ -239,6 +289,25 @@
     <div id="winsTotalEnd">—</div>
     <button class="playbtn" id="againBtn">Drop Again</button>
     <button class="playbtn secondary" id="homeBtn">Home</button>
+  </div>
+
+  <div class="overlay hidden" id="winTrackerOverlay">
+    <div class="subtitle">WIN TRACKER</div>
+    <div id="wtTotal">0<span>wins</span></div>
+    <div id="wtBarWrap">
+      <div id="wtBarTrack">
+        <div id="wtBarFill"></div>
+      </div>
+    </div>
+    <div id="wtNextReward">—</div>
+    <button class="playbtn secondary" id="wtBackBtn">Back</button>
+  </div>
+
+  <div class="overlay hidden" id="powerupsOverlay">
+    <div class="subtitle">CHOOSE 3 POWER-UPS</div>
+    <div id="puSelectedCount">0 / 3 selected</div>
+    <div id="puGrid"></div>
+    <button class="playbtn secondary" id="puBackBtn">Back</button>
   </div>
 </div>
 
@@ -300,7 +369,7 @@
   const startCountdownNum = document.getElementById('startCountdownNum');
 
   // ---------- Power-ups ----------
-  // Each entity spawns already holding one random power-up from this pool of 12 — no pickups on the map.
+  // Base pool of 12 — every match, bots always draw randomly from just these.
   const POWERUP_TYPES = [
     { key:'speed',       label:'ADRENALINE',   color:'#4FD8EA', apply(e){ e.speed *= 1.18; } },
     { key:'vitality',    label:'VITALITY',     color:'#F5A623', apply(e){ e.maxHp += 25; e.hp = Math.min(e.maxHp, e.hp+25); } },
@@ -316,10 +385,27 @@
     { key:'berserker',   label:'BERSERKER',    color:'#FF2E63', apply(e){ e.fireCdMult = (e.fireCdMult||1) * 0.8; e.armor = (e.armor||0) - 0.15; } }
   ];
 
-  function assignRandomPowerup(e){
-    const type = POWERUP_TYPES[Math.floor(Math.random()*POWERUP_TYPES.length)];
+  // Reward power-ups — unlocked one at a time every 10 wins, only available to you (never bots), for your loadout screen.
+  const REWARD_POWERUP_TYPES = [
+    { key:'overdrive',     label:'OVERDRIVE',      color:'#FF9F1C', unlockAt:10, apply(e){ e.speed *= 1.3; e.fireCdMult = (e.fireCdMult||1) * 0.85; } },
+    { key:'titanshell',    label:'TITAN SHELL',    color:'#5C7AEA', unlockAt:20, apply(e){ e.maxHp += 50; e.hp = Math.min(e.maxHp, e.hp+50); e.armor = (e.armor||0) + 0.15; } },
+    { key:'deadeye',       label:'DEADEYE',        color:'#E63946', unlockAt:30, apply(e){ e.dmgMult = (e.dmgMult||1) * 1.6; } },
+    { key:'nanoweave',     label:'NANO WEAVE',     color:'#2EC4B6', unlockAt:40, apply(e){ e.regen = (e.regen||0) + 3; e.armor = (e.armor||0) + 0.1; } },
+    { key:'apexpredator',  label:'APEX PREDATOR',  color:'#FFD60A', unlockAt:50, apply(e){ e.shield = true; e.dmgMult = (e.dmgMult||1) * 1.3; e.speed *= 1.15; } }
+  ];
+
+  const ALL_POWERUP_TYPES = POWERUP_TYPES.concat(REWARD_POWERUP_TYPES);
+
+  function assignRandomPowerup(e, pool){
+    const list = pool || POWERUP_TYPES;
+    const type = list[Math.floor(Math.random()*list.length)];
     type.apply(e);
     e.powerup = type;
+  }
+
+  function assignPlayerPowerup(e){
+    const loadout = getValidLoadout();
+    assignRandomPowerup(e, loadout.length === 3 ? loadout : POWERUP_TYPES);
   }
 
   // ---------- Wins tracker ----------
@@ -340,6 +426,97 @@
   function refreshWinsDisplay(){
     document.getElementById('winsCount').textContent = getWins();
   }
+
+  // ---------- Loadout (choose-3 power-up equip) ----------
+  const LOADOUT_KEY = 'lastSignalLoadout';
+  function getLoadout(){
+    try{
+      const v = JSON.parse(localStorage.getItem(LOADOUT_KEY));
+      return Array.isArray(v) ? v : [];
+    } catch(err){ return []; }
+  }
+  function setLoadout(keys){
+    localStorage.setItem(LOADOUT_KEY, JSON.stringify(keys));
+  }
+  function getUnlockedPool(){
+    const wins = getWins();
+    return ALL_POWERUP_TYPES.filter(t => wins >= (t.unlockAt||0));
+  }
+  function getValidLoadout(){
+    const keys = getLoadout();
+    if(keys.length !== 3) return [];
+    const pool = getUnlockedPool();
+    const resolved = keys.map(k => pool.find(t => t.key === k)).filter(Boolean);
+    return resolved.length === 3 ? resolved : [];
+  }
+  function refreshLobbyExtras(){
+    refreshWinsDisplay();
+    document.getElementById('loadoutCountLobby').textContent = `${getValidLoadout().length}/3`;
+  }
+
+  // ---------- Win tracker screen ----------
+  function renderWinTracker(){
+    const wins = getWins();
+    const maxScale = REWARD_POWERUP_TYPES[REWARD_POWERUP_TYPES.length-1].unlockAt + 10;
+    const pct = clamp(wins/maxScale, 0, 1) * 100;
+    document.getElementById('wtBarFill').style.height = pct + '%';
+    document.getElementById('wtTotal').innerHTML = `${wins}<span>wins</span>`;
+
+    const track = document.getElementById('wtBarTrack');
+    track.querySelectorAll('.wt-tick, .wt-tick-label').forEach(n=>n.remove());
+    REWARD_POWERUP_TYPES.forEach(rt=>{
+      const frac = rt.unlockAt / maxScale;
+      const tick = document.createElement('div');
+      tick.className = 'wt-tick';
+      tick.style.bottom = (frac*100) + '%';
+      track.appendChild(tick);
+
+      const label = document.createElement('div');
+      const unlocked = wins >= rt.unlockAt;
+      label.className = 'wt-tick-label' + (unlocked ? ' unlocked' : '');
+      label.style.bottom = (frac*100) + '%';
+      label.textContent = `${rt.unlockAt} — ${rt.label}${unlocked ? ' ✓' : ''}`;
+      track.appendChild(label);
+    });
+
+    const next = REWARD_POWERUP_TYPES.find(rt => wins < rt.unlockAt);
+    document.getElementById('wtNextReward').textContent = next
+      ? `${next.unlockAt - wins} more win${next.unlockAt-wins===1?'':'s'} to unlock ${next.label}`
+      : 'All reward power-ups unlocked';
+  }
+
+  // ---------- Power-up loadout screen ----------
+  function togglePowerupSelection(key){
+    let loadout = getLoadout();
+    if(loadout.includes(key)){
+      loadout = loadout.filter(k => k !== key);
+    } else {
+      if(loadout.length >= 3) return;
+      loadout.push(key);
+    }
+    setLoadout(loadout);
+    renderPowerupsScreen();
+  }
+
+  function renderPowerupsScreen(){
+    const wins = getWins();
+    const loadout = getLoadout();
+    const grid = document.getElementById('puGrid');
+    grid.innerHTML = '';
+    ALL_POWERUP_TYPES.forEach(type=>{
+      const unlocked = wins >= (type.unlockAt||0);
+      const card = document.createElement('div');
+      card.className = 'pu-card' + (!unlocked ? ' locked' : '') + (loadout.includes(type.key) ? ' selected' : '');
+      card.innerHTML = `<div class="pu-dot" style="background:${type.color}"></div>${type.label}` +
+        (!unlocked ? `<div class="pu-lockinfo">Unlocks @ ${type.unlockAt} wins</div>` : '');
+      if(unlocked){
+        card.addEventListener('click', ()=>togglePowerupSelection(type.key));
+      }
+      grid.appendChild(card);
+    });
+    document.getElementById('puSelectedCount').textContent = `${loadout.length} / 3 selected`;
+  }
+
 
   function rand(a,b){ return a + Math.random()*(b-a); }
   function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
@@ -414,7 +591,7 @@
     }
 
     placeOnRing(entities);
-    entities.forEach(assignRandomPowerup);
+    entities.forEach(e=>{ if(e.isPlayer){ assignPlayerPowerup(e); } else { assignRandomPowerup(e); } });
     document.getElementById('loadoutLabel').textContent = `LOADOUT // ${player.powerup.label}`;
     document.getElementById('loadoutLabel').style.color = player.powerup.color;
 
@@ -991,9 +1168,32 @@
   document.getElementById('homeBtn').addEventListener('click', ()=>{
     document.getElementById('endOverlay').classList.add('hidden');
     document.getElementById('startOverlay').classList.remove('hidden');
-    refreshWinsDisplay();
+    refreshLobbyExtras();
   });
-  refreshWinsDisplay();
+
+  document.getElementById('winTrackerBtn').addEventListener('click', ()=>{
+    document.getElementById('startOverlay').classList.add('hidden');
+    renderWinTracker();
+    document.getElementById('winTrackerOverlay').classList.remove('hidden');
+  });
+  document.getElementById('wtBackBtn').addEventListener('click', ()=>{
+    document.getElementById('winTrackerOverlay').classList.add('hidden');
+    document.getElementById('startOverlay').classList.remove('hidden');
+    refreshLobbyExtras();
+  });
+
+  document.getElementById('powerupsBtn').addEventListener('click', ()=>{
+    document.getElementById('startOverlay').classList.add('hidden');
+    renderPowerupsScreen();
+    document.getElementById('powerupsOverlay').classList.remove('hidden');
+  });
+  document.getElementById('puBackBtn').addEventListener('click', ()=>{
+    document.getElementById('powerupsOverlay').classList.add('hidden');
+    document.getElementById('startOverlay').classList.remove('hidden');
+    refreshLobbyExtras();
+  });
+
+  refreshLobbyExtras();
 
   // prevent iOS rubber-band scrolling / double tap zoom
   document.addEventListener('touchmove', e=>{ e.preventDefault(); }, {passive:false});
