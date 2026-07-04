@@ -155,6 +155,10 @@
     text-align:center; padding:24px;
   }
   .hidden{ display:none !important; }
+  #winTrackerOverlay, #rankOverlay{
+    overflow-y:auto; justify-content:flex-start;
+    padding-top:calc(30px + env(safe-area-inset-top)); padding-bottom:40px;
+  }
   .title{
     font-size:38px; letter-spacing:6px; color:var(--ink);
     margin:0 0 6px 0; font-weight:bold;
@@ -229,7 +233,9 @@
     letter-spacing:1px; color:var(--dim); transform:translateY(-50%); text-transform:uppercase;
   }
   .wt-tick-label.unlocked{ color:var(--amber); }
-  #wtNextReward{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-bottom:26px; text-transform:uppercase; max-width:280px; }
+  #wtNextReward{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-bottom:22px; text-transform:uppercase; max-width:280px; }
+  #wtCollectBtn{ margin-bottom:12px; }
+  #wtCollectBtn:disabled{ opacity:0.4; cursor:not-allowed; }
 
   /* ---- Rank screen ---- */
   #rankTierName{ font-size:24px; letter-spacing:2px; margin-bottom:20px; text-transform:uppercase; }
@@ -245,7 +251,11 @@
   #rankMultInfo{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-bottom:22px; text-transform:uppercase; }
 
   /* ---- Power-up loadout screen ---- */
-  #powerupsOverlay{ overflow-y:auto; padding-top:calc(30px + env(safe-area-inset-top)); padding-bottom:30px; }
+  #powerupsOverlay{
+    overflow-y:auto; justify-content:flex-start;
+    padding-top:calc(30px + env(safe-area-inset-top)); padding-bottom:40px;
+  }
+  #puBackBtnTop{ margin-bottom:18px; padding:8px 20px; font-size:11px; }
   #puCurrency{ font-size:13px; color:var(--amber); letter-spacing:1px; margin-bottom:12px; text-transform:uppercase; }
   #puOpenBoxBtn{ margin-bottom:8px; padding:10px 24px; font-size:12px; }
   #puOpenBoxBtn:disabled{ opacity:0.35; cursor:not-allowed; }
@@ -371,10 +381,12 @@
       </div>
     </div>
     <div id="wtNextReward">—</div>
+    <button class="playbtn" id="wtCollectBtn">Collect</button>
     <button class="playbtn secondary" id="wtBackBtn">Back</button>
   </div>
 
   <div class="overlay hidden" id="powerupsOverlay">
+    <button class="playbtn secondary" id="puBackBtnTop">Back</button>
     <div class="subtitle">CHOOSE 3 POWER-UPS</div>
     <div id="puCurrency">Coins: 0    Boxes: 0</div>
     <button class="playbtn" id="puOpenBoxBtn">No Boxes</button>
@@ -592,17 +604,17 @@
     const v = parseInt(localStorage.getItem(CLAIMED_MILESTONES_KEY), 10);
     return Number.isFinite(v) ? v : 0;
   }
-  function checkAndAwardBoxes(){
-    const wins = getWins();
-    const newCount = milestoneCountForWins(wins);
+  function getPendingBoxCount(){
+    const newCount = milestoneCountForWins(getWins());
     const claimed = getClaimedMilestones();
-    if(newCount > claimed){
-      const gained = newCount - claimed;
-      addBoxes(gained);
-      localStorage.setItem(CLAIMED_MILESTONES_KEY, String(newCount));
-      return gained;
-    }
-    return 0;
+    return Math.max(0, newCount - claimed);
+  }
+  function collectPendingBoxes(){
+    const pending = getPendingBoxCount();
+    if(pending <= 0) return 0;
+    addBoxes(pending);
+    localStorage.setItem(CLAIMED_MILESTONES_KEY, String(milestoneCountForWins(getWins())));
+    return pending;
   }
   function getUnlockedRewardKeys(){
     try{
@@ -823,6 +835,17 @@
     document.getElementById('wtNextReward').textContent = next
       ? `${next - wins} more win${next-wins===1?'':'s'} to earn a Power Box`
       : 'Keep winning — a box arrives every 20 wins from here';
+
+    const pending = getPendingBoxCount();
+    const collectBtn = document.getElementById('wtCollectBtn');
+    collectBtn.disabled = pending <= 0;
+    collectBtn.textContent = pending > 0 ? `Collect ${pending} Power Box${pending>1?'es':''}` : `Boxes in inventory: ${getBoxes()}`;
+  }
+
+  function handleCollectBoxes(){
+    const collected = collectPendingBoxes();
+    renderWinTracker();
+    refreshLobbyExtras();
   }
 
   // ---------- Power-up loadout + upgrade screen ----------
@@ -934,7 +957,7 @@
       vx:0, vy:0,
       facing: 0,
       hp: 100, maxHp:100,
-      speed: isPlayer ? 210 : rand(150,190),
+      speed: isPlayer ? 210 : rand(165,205),
       radius: 16,
       alive: true,
       fireCooldown: 0,
@@ -1205,7 +1228,7 @@
       const a = Math.atan2(stormCenter.y-e.y, stormCenter.x-e.x);
       e.vx = Math.cos(a)*e.speed; e.vy = Math.sin(a)*e.speed;
       e.facing = a;
-    } else if(nearest && nd < 480){
+    } else if(nearest && nd < 560){
       e.facing = Math.atan2(nearest.y-e.y, nearest.x-e.x);
       if(nd > 220){
         e.vx = Math.cos(e.facing)*e.speed; e.vy = Math.sin(e.facing)*e.speed;
@@ -1216,18 +1239,18 @@
       }
       e.fireCooldown -= dt;
       if(e.fireCooldown <= 0){
-        const spread = rand(-0.12,0.12);
+        const spread = rand(-0.07,0.07);
         shoot(e, e.facing + spread);
-        e.fireCooldown = rand(0.9,1.6) * (e.fireCdMult||1);
+        e.fireCooldown = rand(0.65,1.2) * (e.fireCdMult||1);
       }
     } else {
       if(e.aiTimer <= 0){
         e.aiTarget = { x: e.x + rand(-300,300), y: e.y + rand(-300,300) };
-        e.aiTimer = rand(1.5,3);
+        e.aiTimer = rand(0.8,1.8);
       }
       if(e.aiTarget){
         const a = Math.atan2(e.aiTarget.y-e.y, e.aiTarget.x-e.x);
-        e.vx = Math.cos(a)*e.speed*0.55; e.vy = Math.sin(a)*e.speed*0.55;
+        e.vx = Math.cos(a)*e.speed*0.7; e.vy = Math.sin(a)*e.speed*0.7;
         e.facing = a;
       }
     }
@@ -1584,8 +1607,8 @@
       const after = setWins(before + delta);
       winsDeltaEl.textContent = (delta > 0 ? '+' : '') + delta + ' WINS';
       winsDeltaEl.className = delta > 0 ? 'pos' : (delta < 0 ? 'neg' : 'zero');
-      const boxesGained = checkAndAwardBoxes();
-      winsTotalEl.textContent = `Total wins: ${after}` + (boxesGained > 0 ? `  //  +${boxesGained} Power Box${boxesGained>1?'es':''}!` : '');
+      const boxesPending = getPendingBoxCount();
+      winsTotalEl.textContent = `Total wins: ${after}` + (boxesPending > 0 ? `  //  ${boxesPending} Power Box${boxesPending>1?'es':''} waiting in Win Tracker!` : '');
     }
 
     refreshWinsDisplay();
@@ -1613,6 +1636,7 @@
     renderWinTracker();
     document.getElementById('winTrackerOverlay').classList.remove('hidden');
   });
+  document.getElementById('wtCollectBtn').addEventListener('click', handleCollectBoxes);
   document.getElementById('wtBackBtn').addEventListener('click', ()=>{
     document.getElementById('winTrackerOverlay').classList.add('hidden');
     document.getElementById('startOverlay').classList.remove('hidden');
@@ -1626,11 +1650,13 @@
     document.getElementById('powerupsOverlay').classList.remove('hidden');
   });
   document.getElementById('puOpenBoxBtn').addEventListener('click', handleOpenBox);
-  document.getElementById('puBackBtn').addEventListener('click', ()=>{
+  function closePowerupsScreen(){
     document.getElementById('powerupsOverlay').classList.add('hidden');
     document.getElementById('startOverlay').classList.remove('hidden');
     refreshLobbyExtras();
-  });
+  }
+  document.getElementById('puBackBtn').addEventListener('click', closePowerupsScreen);
+  document.getElementById('puBackBtnTop').addEventListener('click', closePowerupsScreen);
 
   document.getElementById('rankBtn').addEventListener('click', ()=>{
     document.getElementById('startOverlay').classList.add('hidden');
