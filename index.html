@@ -140,6 +140,12 @@
     animation: pulseNum 1s infinite;
   }
   @keyframes pulseNum{ 0%{opacity:1;} 50%{opacity:0.5;} 100%{opacity:1;} }
+  #powerupReveal{
+    margin-top:14px; display:flex; flex-direction:column; align-items:center;
+  }
+  #powerupRevealDot{ width:16px; height:16px; border-radius:50%; margin-bottom:6px; }
+  #powerupRevealLabel{ font-size:16px; letter-spacing:2px; margin-bottom:4px; }
+  #powerupRevealDesc{ font-size:11px; color:var(--dim); letter-spacing:0.5px; max-width:260px; text-align:center; }
 
   /* ---- Overlays ---- */
   .overlay{
@@ -171,7 +177,18 @@
   button.playbtn.secondary:active{ background:rgba(123,138,147,0.15); }
   .hint{ margin-top:22px; color:var(--dim); font-size:11px; letter-spacing:1px; max-width:320px; line-height:1.6;}
 
-  .lobbyCardRow{ display:flex; gap:10px; margin-bottom:26px; }
+  .lobbyCardRow{ display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; justify-content:center; }
+  .modeToggleRow{ display:flex; gap:8px; margin-bottom:22px; }
+  .modeBtn{
+    background:transparent; border:1px solid var(--grid); color:var(--dim);
+    padding:9px 22px; font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    font-family:inherit; cursor:pointer;
+  }
+  .modeBtn.active{ border-color:var(--amber); color:var(--amber); background:rgba(245,166,35,0.08); }
+  #rankUpBanner{
+    font-size:16px; letter-spacing:2px; color:var(--amber); text-transform:uppercase;
+    margin-bottom:10px; animation: pulseNum 1s infinite;
+  }
   .lobbyCard{
     border:1px solid var(--grid); padding:14px 20px; min-width:130px;
     text-align:center; cursor:pointer; transition:border-color .15s, background .15s;
@@ -214,6 +231,19 @@
   .wt-tick-label.unlocked{ color:var(--amber); }
   #wtNextReward{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-bottom:26px; text-transform:uppercase; max-width:280px; }
 
+  /* ---- Rank screen ---- */
+  #rankTierName{ font-size:24px; letter-spacing:2px; margin-bottom:20px; text-transform:uppercase; }
+  #rankBarWrap{ height:min(48vh,380px); width:64px; margin-bottom:20px; position:relative; }
+  #rankBarTrack{
+    position:relative; width:100%; height:100%;
+    border:1px solid var(--grid); background:rgba(255,255,255,0.02); overflow:visible;
+  }
+  #rankBarFill{
+    position:absolute; bottom:0; left:0; width:100%; height:0%;
+    background:var(--amber); transition:height .6s ease, background .6s ease;
+  }
+  #rankMultInfo{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-bottom:22px; text-transform:uppercase; }
+
   /* ---- Power-up loadout screen ---- */
   #powerupsOverlay{ overflow-y:auto; padding-top:calc(30px + env(safe-area-inset-top)); padding-bottom:30px; }
   #puSelectedCount{ font-size:12px; color:var(--dim); letter-spacing:2px; margin-bottom:16px; text-transform:uppercase; }
@@ -245,6 +275,11 @@
   <div id="startCountdown" class="hidden">
     <div id="startCountdownLabel">Game starts in</div>
     <div id="startCountdownNum">5</div>
+    <div id="powerupReveal">
+      <div id="powerupRevealDot"></div>
+      <div id="powerupRevealLabel">—</div>
+      <div id="powerupRevealDesc">—</div>
+    </div>
   </div>
 
   <div id="feed"></div>
@@ -273,22 +308,47 @@
         <div class="lobbyCardValue" id="loadoutCountLobby">0/3</div>
         <div class="lobbyCardSub">Tap to equip</div>
       </div>
+      <div class="lobbyCard" id="rankBtn">
+        <div class="lobbyCardLabel">Rank</div>
+        <div class="lobbyCardValue" id="rankTierLobby">BRONZE</div>
+      </div>
+    </div>
+    <div class="modeToggleRow">
+      <button class="modeBtn" id="modeCasualBtn">Casual</button>
+      <button class="modeBtn" id="modeRankedBtn">Ranked</button>
     </div>
     <button class="playbtn" id="startBtn">Drop In</button>
     <div class="hint">Desktop: WASD / Arrows to move, mouse to aim, click or Space to fire.<br>
     Mobile: left thumb to move. On the right, drag to aim and auto-fire, or tap the FIRE button to shoot in your current facing direction.<br>
-    Everyone drops in lined up on the edge of the zone — you can't move until the 5-second countdown hits zero. Each player spawns already holding one random power-up out of 12.<br>
+    Everyone drops in lined up on the edge of the zone — you can't move until the 5-second countdown hits zero. Each player spawns already holding one random power-up, revealed to you as the countdown runs.<br>
     Stay inside the cyan zone. Last signal standing wins.<br>
-    1st +3 wins · 2nd +2 · 3rd +1 · 4th +0 · 5th and below lose wins.</div>
+    Casual: 1st +3 wins · 2nd +2 · 3rd +1 · 4th +0 · 5th and below lose wins.<br>
+    Ranked: climb Bronze → Silver → Gold → Platinum → Diamond → Champion. Higher ranks face tougher bots, and rewards shrink each promotion.</div>
   </div>
 
   <div class="overlay hidden" id="endOverlay">
     <div class="bigresult" id="resultText">—</div>
     <div class="statline" id="resultStat">—</div>
+    <div id="rankUpBanner" class="hidden">RANK UP!</div>
     <div id="winsDelta">—</div>
     <div id="winsTotalEnd">—</div>
+    <div id="rankDelta" class="hidden">—</div>
+    <div id="rankTierEnd" class="hidden">—</div>
     <button class="playbtn" id="againBtn">Drop Again</button>
     <button class="playbtn secondary" id="homeBtn">Home</button>
+  </div>
+
+  <div class="overlay hidden" id="rankOverlay">
+    <div class="subtitle">RANK</div>
+    <div id="rankTierName">BRONZE — 0%</div>
+    <div id="rankBarWrap">
+      <div id="rankBarTrack">
+        <div id="rankBarFill"></div>
+      </div>
+    </div>
+    <div id="rankMultInfo">—</div>
+    <div class="hint">Higher ranks face tougher, faster opponents — and each promotion shrinks how much wins and eliminations are worth.</div>
+    <button class="playbtn secondary" id="rankBackBtn">Back</button>
   </div>
 
   <div class="overlay hidden" id="winTrackerOverlay">
@@ -371,27 +431,27 @@
   // ---------- Power-ups ----------
   // Base pool of 12 — every match, bots always draw randomly from just these.
   const POWERUP_TYPES = [
-    { key:'speed',       label:'ADRENALINE',   color:'#4FD8EA', apply(e){ e.speed *= 1.18; } },
-    { key:'vitality',    label:'VITALITY',     color:'#F5A623', apply(e){ e.maxHp += 25; e.hp = Math.min(e.maxHp, e.hp+25); } },
-    { key:'regen',       label:'STIMPACK',     color:'#7CF29C', apply(e){ e.regen = (e.regen||0) + 1.5; } },
-    { key:'rapidfire',   label:'OVERCLOCK',    color:'#F5D423', apply(e){ e.fireCdMult = (e.fireCdMult||1) * 0.72; } },
-    { key:'heavyrounds', label:'HEAVY ROUNDS', color:'#FF7A45', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.4; } },
-    { key:'armor',       label:'KEVLAR',       color:'#8C7BFF', apply(e){ e.armor = Math.min(0.6, (e.armor||0) + 0.25); } },
-    { key:'velocity',    label:'VELOCITY',     color:'#4FE8D8', apply(e){ e.bulletSpeedMult = (e.bulletSpeedMult||1) * 1.3; } },
-    { key:'secondwind',  label:'SECOND WIND',  color:'#FF4655', apply(e){ e.hp = e.maxHp; e.shield = true; } },
-    { key:'phantom',     label:'PHANTOM',      color:'#B8E8FF', apply(e){ e.radius = Math.max(10, e.radius-3); e.speed *= 1.10; } },
-    { key:'juggernaut',  label:'JUGGERNAUT',   color:'#D9A441', apply(e){ e.maxHp += 40; e.hp = Math.min(e.maxHp, e.hp+40); e.speed *= 0.9; } },
-    { key:'marksman',    label:'MARKSMAN',     color:'#C9F24F', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.25; e.bulletSpeedMult = (e.bulletSpeedMult||1) * 1.25; } },
-    { key:'berserker',   label:'BERSERKER',    color:'#FF2E63', apply(e){ e.fireCdMult = (e.fireCdMult||1) * 0.8; e.armor = (e.armor||0) - 0.15; } }
+    { key:'speed',       label:'ADRENALINE',   color:'#4FD8EA', desc:'+18% movement speed', apply(e){ e.speed *= 1.18; } },
+    { key:'vitality',    label:'VITALITY',     color:'#F5A623', desc:'+25 max HP, heals you now', apply(e){ e.maxHp += 25; e.hp = Math.min(e.maxHp, e.hp+25); } },
+    { key:'regen',       label:'STIMPACK',     color:'#7CF29C', desc:'Regenerates 1.5 HP per second', apply(e){ e.regen = (e.regen||0) + 1.5; } },
+    { key:'rapidfire',   label:'OVERCLOCK',    color:'#F5D423', desc:'Fires 28% faster', apply(e){ e.fireCdMult = (e.fireCdMult||1) * 0.72; } },
+    { key:'heavyrounds', label:'HEAVY ROUNDS', color:'#FF7A45', desc:'+40% bullet damage', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.4; } },
+    { key:'armor',       label:'KEVLAR',       color:'#8C7BFF', desc:'-25% damage taken', apply(e){ e.armor = Math.min(0.6, (e.armor||0) + 0.25); } },
+    { key:'velocity',    label:'VELOCITY',     color:'#4FE8D8', desc:'+30% bullet speed', apply(e){ e.bulletSpeedMult = (e.bulletSpeedMult||1) * 1.3; } },
+    { key:'secondwind',  label:'SECOND WIND',  color:'#FF4655', desc:'Full heal, blocks your next hit', apply(e){ e.hp = e.maxHp; e.shield = true; } },
+    { key:'phantom',     label:'PHANTOM',      color:'#B8E8FF', desc:'Smaller hitbox, +10% speed', apply(e){ e.radius = Math.max(10, e.radius-3); e.speed *= 1.10; } },
+    { key:'juggernaut',  label:'JUGGERNAUT',   color:'#D9A441', desc:'+40 max HP, but -10% speed', apply(e){ e.maxHp += 40; e.hp = Math.min(e.maxHp, e.hp+40); e.speed *= 0.9; } },
+    { key:'marksman',    label:'MARKSMAN',     color:'#C9F24F', desc:'+25% damage and bullet speed', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.25; e.bulletSpeedMult = (e.bulletSpeedMult||1) * 1.25; } },
+    { key:'berserker',   label:'BERSERKER',    color:'#FF2E63', desc:'Fires 20% faster, but -15% damage resistance', apply(e){ e.fireCdMult = (e.fireCdMult||1) * 0.8; e.armor = (e.armor||0) - 0.15; } }
   ];
 
   // Reward power-ups — unlocked one at a time every 10 wins, only available to you (never bots), for your loadout screen.
   const REWARD_POWERUP_TYPES = [
-    { key:'overdrive',     label:'OVERDRIVE',      color:'#FF9F1C', unlockAt:10, apply(e){ e.speed *= 1.3; e.fireCdMult = (e.fireCdMult||1) * 0.85; } },
-    { key:'titanshell',    label:'TITAN SHELL',    color:'#5C7AEA', unlockAt:20, apply(e){ e.maxHp += 50; e.hp = Math.min(e.maxHp, e.hp+50); e.armor = (e.armor||0) + 0.15; } },
-    { key:'deadeye',       label:'DEADEYE',        color:'#E63946', unlockAt:30, apply(e){ e.dmgMult = (e.dmgMult||1) * 1.6; } },
-    { key:'nanoweave',     label:'NANO WEAVE',     color:'#2EC4B6', unlockAt:40, apply(e){ e.regen = (e.regen||0) + 3; e.armor = (e.armor||0) + 0.1; } },
-    { key:'apexpredator',  label:'APEX PREDATOR',  color:'#FFD60A', unlockAt:50, apply(e){ e.shield = true; e.dmgMult = (e.dmgMult||1) * 1.3; e.speed *= 1.15; } }
+    { key:'overdrive',     label:'OVERDRIVE',      color:'#FF9F1C', unlockAt:10, desc:'+30% speed, fires 15% faster', apply(e){ e.speed *= 1.3; e.fireCdMult = (e.fireCdMult||1) * 0.85; } },
+    { key:'titanshell',    label:'TITAN SHELL',    color:'#5C7AEA', unlockAt:20, desc:'+50 max HP, +15% damage reduction', apply(e){ e.maxHp += 50; e.hp = Math.min(e.maxHp, e.hp+50); e.armor = (e.armor||0) + 0.15; } },
+    { key:'deadeye',       label:'DEADEYE',        color:'#E63946', unlockAt:30, desc:'+60% bullet damage', apply(e){ e.dmgMult = (e.dmgMult||1) * 1.6; } },
+    { key:'nanoweave',     label:'NANO WEAVE',     color:'#2EC4B6', unlockAt:40, desc:'Regenerates 3 HP/sec, +10% damage reduction', apply(e){ e.regen = (e.regen||0) + 3; e.armor = (e.armor||0) + 0.1; } },
+    { key:'apexpredator',  label:'APEX PREDATOR',  color:'#FFD60A', unlockAt:50, desc:'Shield, +30% damage, +15% speed', apply(e){ e.shield = true; e.dmgMult = (e.dmgMult||1) * 1.3; e.speed *= 1.15; } }
   ];
 
   const ALL_POWERUP_TYPES = POWERUP_TYPES.concat(REWARD_POWERUP_TYPES);
@@ -452,6 +512,113 @@
   function refreshLobbyExtras(){
     refreshWinsDisplay();
     document.getElementById('loadoutCountLobby').textContent = `${getValidLoadout().length}/3`;
+    const tier = getRankTier();
+    const rankLobbyEl = document.getElementById('rankTierLobby');
+    rankLobbyEl.textContent = RANK_TIERS[tier].label;
+    rankLobbyEl.style.color = RANK_TIERS[tier].color;
+  }
+
+  // ---------- Ranked mode ----------
+  const RANK_TIERS = [
+    { key:'bronze',   label:'BRONZE',   color:'#C97A4A' },
+    { key:'silver',   label:'SILVER',   color:'#C7CCD6' },
+    { key:'gold',     label:'GOLD',     color:'#F5C518' },
+    { key:'platinum', label:'PLATINUM', color:'#5FD3C4' },
+    { key:'diamond',  label:'DIAMOND',  color:'#7FB3FF' },
+    { key:'champion', label:'CHAMPION', color:'#FF4655' }
+  ];
+  const RANK_TIER_KEY = 'lastSignalRankTier';
+  const RANK_RP_KEY = 'lastSignalRankRP';
+  const MODE_KEY = 'lastSignalMode';
+
+  function getRankTier(){
+    const v = parseInt(localStorage.getItem(RANK_TIER_KEY), 10);
+    return Number.isFinite(v) ? clamp(v, 0, RANK_TIERS.length-1) : 0;
+  }
+  function getRankRP(){
+    const v = parseInt(localStorage.getItem(RANK_RP_KEY), 10);
+    return Number.isFinite(v) ? clamp(v, 0, 100) : 0;
+  }
+  function setRank(tier, rp){
+    localStorage.setItem(RANK_TIER_KEY, String(tier));
+    localStorage.setItem(RANK_RP_KEY, String(rp));
+  }
+  function rankMultiplier(tier){
+    // rewards shrink each promotion: Bronze 100% down to Champion 25%
+    return Math.max(0.25, 1 - tier*0.15);
+  }
+  function applyRankProgress(won, kills){
+    let tier = getRankTier();
+    let rp = getRankRP();
+    const mult = rankMultiplier(tier);
+    const gain = (won ? 25 : 0)*mult + kills*5*mult;
+    rp += gain;
+    let rankedUp = false;
+    while(rp >= 100 && tier < RANK_TIERS.length-1){
+      rp -= 100; tier++; rankedUp = true;
+    }
+    if(tier === RANK_TIERS.length-1){ rp = Math.min(rp, 100); }
+    setRank(tier, rp);
+    return { tier, rp, gain: Math.round(gain), rankedUp };
+  }
+  function applyRankDifficulty(bot, tier){
+    // the higher your rank, the tougher the bots
+    const hpMult = 1 + tier*0.15;
+    const dmgMultR = 1 + tier*0.12;
+    const speedMultR = 1 + tier*0.06;
+    const fireCdR = Math.max(0.55, 1 - tier*0.08);
+    bot.maxHp = Math.round(100 * hpMult);
+    bot.hp = bot.maxHp;
+    bot.speed *= speedMultR;
+    bot.dmgMult = (bot.dmgMult||1) * dmgMultR;
+    bot.fireCdMult = (bot.fireCdMult||1) * fireCdR;
+  }
+
+  let matchMode = localStorage.getItem(MODE_KEY) === 'ranked' ? 'ranked' : 'casual';
+  function setMatchMode(mode){
+    matchMode = mode;
+    localStorage.setItem(MODE_KEY, mode);
+    updateModeButtons();
+  }
+  function updateModeButtons(){
+    document.getElementById('modeCasualBtn').classList.toggle('active', matchMode === 'casual');
+    document.getElementById('modeRankedBtn').classList.toggle('active', matchMode === 'ranked');
+  }
+
+  // ---------- Rank screen ----------
+  function renderRankScreen(){
+    const tier = getRankTier();
+    const rp = getRankRP();
+    const n = RANK_TIERS.length;
+    const frac = clamp((tier + rp/100)/n, 0, 1);
+    const fillEl = document.getElementById('rankBarFill');
+    fillEl.style.height = (frac*100) + '%';
+    fillEl.style.background = RANK_TIERS[tier].color;
+
+    const nameEl = document.getElementById('rankTierName');
+    const maxed = tier === n-1 && rp >= 100;
+    nameEl.textContent = RANK_TIERS[tier].label + (maxed ? ' (MAX)' : ` — ${Math.round(rp)}%`);
+    nameEl.style.color = RANK_TIERS[tier].color;
+
+    const mult = rankMultiplier(tier);
+    document.getElementById('rankMultInfo').textContent = `Reward multiplier: ${Math.round(mult*100)}%`;
+
+    const track = document.getElementById('rankBarTrack');
+    track.querySelectorAll('.wt-tick, .wt-tick-label').forEach(node=>node.remove());
+    RANK_TIERS.forEach((rt,i)=>{
+      const fracTick = i/n;
+      const tick = document.createElement('div');
+      tick.className = 'wt-tick';
+      tick.style.bottom = (fracTick*100) + '%';
+      track.appendChild(tick);
+
+      const label = document.createElement('div');
+      label.className = 'wt-tick-label' + (i <= tier ? ' unlocked' : '');
+      label.style.bottom = (fracTick*100) + '%';
+      if(i === tier){ label.style.color = rt.color; }
+      label.textContent = rt.label;
+      track.appendChild(label);
+    });
   }
 
   // ---------- Win tracker screen ----------
@@ -591,9 +758,20 @@
     }
 
     placeOnRing(entities);
+
+    if(matchMode === 'ranked'){
+      const tier = getRankTier();
+      entities.forEach(e=>{ if(!e.isPlayer){ applyRankDifficulty(e, tier); } });
+    }
+
     entities.forEach(e=>{ if(e.isPlayer){ assignPlayerPowerup(e); } else { assignRandomPowerup(e); } });
     document.getElementById('loadoutLabel').textContent = `LOADOUT // ${player.powerup.label}`;
     document.getElementById('loadoutLabel').style.color = player.powerup.color;
+
+    document.getElementById('powerupRevealDot').style.background = player.powerup.color;
+    document.getElementById('powerupRevealLabel').textContent = player.powerup.label;
+    document.getElementById('powerupRevealLabel').style.color = player.powerup.color;
+    document.getElementById('powerupRevealDesc').textContent = player.powerup.desc;
 
     gameOver = false;
     endSequenceStarted = false;
@@ -1143,15 +1321,47 @@
     document.getElementById('resultStat').textContent =
       `Placed ${placeLabel}  //  Eliminations: ${killCount}  //  Time alive: ${survived}s`;
 
-    const delta = scoreForPlace(place);
-    const before = getWins();
-    const after = setWins(before + delta);
-    const deltaEl = document.getElementById('winsDelta');
-    deltaEl.textContent = (delta > 0 ? '+' : '') + delta + ' WINS';
-    deltaEl.className = delta > 0 ? 'pos' : (delta < 0 ? 'neg' : 'zero');
-    document.getElementById('winsTotalEnd').textContent = `Total wins: ${after}`;
-    refreshWinsDisplay();
+    const winsDeltaEl = document.getElementById('winsDelta');
+    const winsTotalEl = document.getElementById('winsTotalEnd');
+    const rankDeltaEl = document.getElementById('rankDelta');
+    const rankTierEndEl = document.getElementById('rankTierEnd');
+    const rankUpBanner = document.getElementById('rankUpBanner');
 
+    if(matchMode === 'ranked'){
+      winsDeltaEl.classList.add('hidden');
+      winsTotalEl.classList.add('hidden');
+      rankDeltaEl.classList.remove('hidden');
+      rankTierEndEl.classList.remove('hidden');
+
+      const result = applyRankProgress(won, killCount);
+      rankDeltaEl.textContent = `+${result.gain} RP`;
+      rankDeltaEl.className = 'pos';
+      const maxed = result.tier === RANK_TIERS.length-1 && result.rp >= 100;
+      rankTierEndEl.textContent = RANK_TIERS[result.tier].label + (maxed ? ' (MAX)' : ` — ${Math.round(result.rp)}%`);
+      rankTierEndEl.style.color = RANK_TIERS[result.tier].color;
+
+      if(result.rankedUp){
+        rankUpBanner.textContent = `RANK UP — ${RANK_TIERS[result.tier].label}!`;
+        rankUpBanner.classList.remove('hidden');
+      } else {
+        rankUpBanner.classList.add('hidden');
+      }
+    } else {
+      rankDeltaEl.classList.add('hidden');
+      rankTierEndEl.classList.add('hidden');
+      rankUpBanner.classList.add('hidden');
+      winsDeltaEl.classList.remove('hidden');
+      winsTotalEl.classList.remove('hidden');
+
+      const delta = scoreForPlace(place);
+      const before = getWins();
+      const after = setWins(before + delta);
+      winsDeltaEl.textContent = (delta > 0 ? '+' : '') + delta + ' WINS';
+      winsDeltaEl.className = delta > 0 ? 'pos' : (delta < 0 ? 'neg' : 'zero');
+      winsTotalEl.textContent = `Total wins: ${after}`;
+    }
+
+    refreshWinsDisplay();
     el.classList.remove('hidden');
   }
 
@@ -1192,6 +1402,21 @@
     document.getElementById('startOverlay').classList.remove('hidden');
     refreshLobbyExtras();
   });
+
+  document.getElementById('rankBtn').addEventListener('click', ()=>{
+    document.getElementById('startOverlay').classList.add('hidden');
+    renderRankScreen();
+    document.getElementById('rankOverlay').classList.remove('hidden');
+  });
+  document.getElementById('rankBackBtn').addEventListener('click', ()=>{
+    document.getElementById('rankOverlay').classList.add('hidden');
+    document.getElementById('startOverlay').classList.remove('hidden');
+    refreshLobbyExtras();
+  });
+
+  document.getElementById('modeCasualBtn').addEventListener('click', ()=>setMatchMode('casual'));
+  document.getElementById('modeRankedBtn').addEventListener('click', ()=>setMatchMode('ranked'));
+  updateModeButtons();
 
   refreshLobbyExtras();
 
