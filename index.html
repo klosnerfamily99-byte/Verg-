@@ -33,7 +33,12 @@
     padding-left:env(safe-area-inset-left);
     padding-right:env(safe-area-inset-right);
   }
-  canvas{ display:block; width:100%; height:100%; background:var(--bg); }
+  #game{ display:block; width:100%; height:100%; background:#8fd0ff; }
+  #minimap{
+    position:absolute; right:16px; bottom:calc(24px + env(safe-area-inset-bottom));
+    width:120px; height:120px; z-index:4; border:1px solid var(--grid);
+    background:rgba(11,15,18,0.7);
+  }
 
   /* ---- HUD ---- */
   #hud{
@@ -53,6 +58,16 @@
   .hud-block b{ color:var(--ink); font-size:14px; }
   #alive b{ color:var(--danger); }
   #storm-timer b{ color:var(--amber); }
+
+  #crosshair{
+    position:absolute; left:50%; top:50%; width:16px; height:16px;
+    transform:translate(-50%,-50%); z-index:5; pointer-events:none;
+  }
+  #crosshair::before, #crosshair::after{
+    content:''; position:absolute; background:rgba(232,237,240,0.85);
+  }
+  #crosshair::before{ left:50%; top:0; width:2px; height:16px; transform:translateX(-50%); }
+  #crosshair::after{ top:50%; left:0; height:2px; width:16px; transform:translateY(-50%); }
 
   #healthWrap{
     position:absolute; left:16px; bottom:calc(16px + env(safe-area-inset-bottom));
@@ -102,21 +117,10 @@
     background:rgba(79,216,234,0.35); border:1px solid var(--safe);
     transform:translate(-50%,-50%);
   }
-
-  #aimBase{
-    position:absolute; width:100px; height:100px; border-radius:50%;
-    border:1px solid var(--danger); background:rgba(255,70,85,0.06);
-    display:none;
-  }
-  #aimStick{
-    position:absolute; width:44px; height:44px; border-radius:50%;
-    background:rgba(255,70,85,0.35); border:1px solid var(--danger);
-    transform:translate(-50%,-50%);
-  }
-  #aimHint{
+  #lookHint{
     position:absolute; right:16px; bottom:calc(16px + env(safe-area-inset-bottom));
     font-size:10px; letter-spacing:2px; color:var(--dim); text-transform:uppercase;
-    pointer-events:none; z-index:6;
+    pointer-events:none; z-index:3;
   }
   #fireBtn{
     position:absolute; right:39px; bottom:calc(158px + env(safe-area-inset-bottom));
@@ -155,6 +159,20 @@
     text-align:center; padding:24px;
   }
   .hidden{ display:none !important; }
+  .scrollableOverlay{ touch-action:pan-y; }
+  #boxModal{ z-index:30; }
+  #boxModalCount{ font-size:11px; color:var(--dim); letter-spacing:2px; margin-bottom:18px; text-transform:uppercase; }
+  #boxIcon{
+    width:120px; height:120px; border:2px solid var(--amber); background:rgba(245,166,35,0.08);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; margin:0 auto 16px;
+    font-size:52px; color:var(--amber); transition:transform .15s, opacity .3s, background .3s;
+  }
+  #boxIcon:active{ transform:scale(0.9); }
+  #boxIcon.opened{ opacity:0.25; pointer-events:none; background:transparent; }
+  #boxModalPrompt{ font-size:13px; color:var(--dim); letter-spacing:2px; text-transform:uppercase; margin-bottom:16px; }
+  #boxModalResults{ margin-bottom:20px; }
+  .box-reward-line{ font-size:15px; color:var(--amber); letter-spacing:1px; margin-bottom:6px; text-transform:uppercase; }
+  #boxModalButtons{ display:flex; flex-direction:column; gap:10px; align-items:center; }
   #winTrackerOverlay, #rankOverlay{
     overflow-y:auto; justify-content:flex-start;
     padding-top:calc(30px + env(safe-area-inset-top)); padding-bottom:40px;
@@ -287,6 +305,8 @@
 <body>
 <div id="wrap">
   <canvas id="game"></canvas>
+  <canvas id="minimap"></canvas>
+  <div id="crosshair"></div>
 
   <div id="hud">
     <div class="hud-block" id="alive">Remaining<br><b id="aliveCount">-</b></div>
@@ -312,13 +332,13 @@
   </div>
 
   <div id="joyZone"><div id="joyBase"><div id="joyStick"></div></div></div>
-  <div id="fireZone"><div id="aimBase"><div id="aimStick"></div></div></div>
-  <div id="aimHint">Drag to aim &amp; fire</div>
+  <div id="fireZone"></div>
+  <div id="lookHint">Drag to look</div>
   <div id="fireBtn">FIRE</div>
 
   <div class="overlay" id="startOverlay">
     <h1 class="title">VER<span>GE</span></h1>
-    <div class="subtitle">a minimal battle royale</div>
+    <div class="subtitle">a first-person battle royale — island, v1</div>
     <div class="lobbyCardRow">
       <div class="lobbyCard" id="winTrackerBtn">
         <div class="lobbyCardLabel">Win Tracker</div>
@@ -339,10 +359,10 @@
       <button class="modeBtn" id="modeRankedBtn">Ranked</button>
     </div>
     <button class="playbtn" id="startBtn">Drop In</button>
-    <div class="hint">Desktop: WASD / Arrows to move, mouse to aim, click or Space to fire.<br>
-    Mobile: left thumb to move. On the right, drag to aim and auto-fire, or tap the FIRE button to shoot in your current facing direction.<br>
-    Everyone drops in lined up on the edge of the zone — you can't move until the 5-second countdown hits zero. Each player spawns already holding one random power-up, revealed to you as the countdown runs.<br>
-    Stay inside the cyan zone. Last one standing wins.<br>
+    <div class="hint">Desktop: WASD to move, click the screen once then move the mouse to look, Space or click to fire.<br>
+    Mobile: left thumb to move, drag anywhere on the right to look around, tap FIRE to shoot where you're looking.<br>
+    Everyone drops in lined up on the edge of the island's safe zone — you can't move until the 5-second countdown hits zero. Each player spawns already holding one random power-up, revealed to you as the countdown runs.<br>
+    Stay inside the cyan wall. Last one standing wins.<br>
     Casual: 1st +3 wins · 2nd +2 · 3rd +1 · 4th +0 · 5th and below lose wins. Every 10 wins (then every 20 past 50) earns a Power Box — open it for coins or a rare power-up, and spend coins to upgrade any power-up up to 5 times.<br>
     Ranked: climb Bronze → Silver → Gold → Platinum → Diamond → Champion. Higher ranks face tougher bots, and rewards shrink each promotion.</div>
   </div>
@@ -359,7 +379,7 @@
     <button class="playbtn secondary" id="homeBtn">Home</button>
   </div>
 
-  <div class="overlay hidden" id="rankOverlay">
+  <div class="overlay hidden scrollableOverlay" id="rankOverlay">
     <div class="subtitle">RANK</div>
     <div id="rankTierName">BRONZE — 0%</div>
     <div id="rankBarWrap">
@@ -372,7 +392,7 @@
     <button class="playbtn secondary" id="rankBackBtn">Back</button>
   </div>
 
-  <div class="overlay hidden" id="winTrackerOverlay">
+  <div class="overlay hidden scrollableOverlay" id="winTrackerOverlay">
     <div class="subtitle">WIN TRACKER</div>
     <div id="wtTotal">0<span>wins</span></div>
     <div id="wtBarWrap">
@@ -385,7 +405,7 @@
     <button class="playbtn secondary" id="wtBackBtn">Back</button>
   </div>
 
-  <div class="overlay hidden" id="powerupsOverlay">
+  <div class="overlay hidden scrollableOverlay" id="powerupsOverlay">
     <button class="playbtn secondary" id="puBackBtnTop">Back</button>
     <div class="subtitle">CHOOSE 3 POWER-UPS</div>
     <div id="puCurrency">Coins: 0    Boxes: 0</div>
@@ -395,36 +415,133 @@
     <div id="puGrid"></div>
     <button class="playbtn secondary" id="puBackBtn">Back</button>
   </div>
+
+  <div class="overlay hidden" id="boxModal">
+    <div class="subtitle">POWER BOX</div>
+    <div id="boxModalCount">0 boxes ready</div>
+    <div id="boxIcon">?</div>
+    <div id="boxModalPrompt">Tap the box to open it</div>
+    <div id="boxModalResults" class="hidden"></div>
+    <div id="boxModalButtons" class="hidden">
+      <button class="playbtn" id="boxModalNextBtn">Open Next</button>
+      <button class="playbtn secondary" id="boxModalDoneBtn">Done</button>
+    </div>
+  </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function(){
   "use strict";
 
-  // ---------- Canvas setup ----------
+  // ---------- Three.js renderer / scene / camera ----------
   const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
+  const minimapCanvas = document.getElementById('minimap');
   let W, H, DPR;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x8fd0ff);
+  scene.fog = new THREE.Fog(0x8fd0ff, 900, 2200);
+
+  const camera3d = new THREE.PerspectiveCamera(75, 1, 0.1, 3000);
+  const EYE_HEIGHT = 30;
+  camera3d.rotation.order = 'YXZ';
+  camera3d.position.set(0, EYE_HEIGHT, 0);
+
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x2e5c38, 0.95);
+  scene.add(hemiLight);
+  const sunLight = new THREE.DirectionalLight(0xfff3d6, 0.85);
+  sunLight.position.set(400, 700, 250);
+  scene.add(sunLight);
+
   function resize(){
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     W = window.innerWidth; H = window.innerHeight;
-    canvas.width = W * DPR; canvas.height = H * DPR;
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-    ctx.setTransform(DPR,0,0,DPR,0,0);
-  }
-  window.addEventListener('resize', resize);
-  resize();
+    renderer.setPixelRatio(DPR);
+    renderer.setSize(W, H, false);
+    camera3d.aspect = W / H;
+    camera3d.updateProjectionMatrix();
 
-  // ---------- World ----------
-  const WORLD = { w: 2200, h: 2200 };
+    const mmSize = 120;
+    minimapCanvas.width = mmSize * DPR;
+    minimapCanvas.height = mmSize * DPR;
+    minimapCtx = minimapCanvas.getContext('2d');
+    minimapCtx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  let minimapCtx = null;
+  window.addEventListener('resize', resize);
+
+  // ---------- World / island ----------
+  const WORLD_RADIUS = 1300;
   const BOT_NAMES = ["RVN","ECHO","JAX","VESTA","KILO","NULL","ORCA","IRIS","GRIT","SABLE","ZERO","MOTH","FLINT","AXIS","PRISM","HOLLOW"];
+
+  function buildIsland(){
+    const ocean = new THREE.Mesh(
+      new THREE.PlaneGeometry(24000, 24000),
+      new THREE.MeshLambertMaterial({ color: 0x2f7bb0 })
+    );
+    ocean.rotation.x = -Math.PI/2;
+    ocean.position.y = -3;
+    scene.add(ocean);
+
+    const sand = new THREE.Mesh(
+      new THREE.CircleGeometry(WORLD_RADIUS*1.18, 48),
+      new THREE.MeshLambertMaterial({ color: 0xdccb8a })
+    );
+    sand.rotation.x = -Math.PI/2;
+    sand.position.y = -0.4;
+    scene.add(sand);
+
+    const grass = new THREE.Mesh(
+      new THREE.CircleGeometry(WORLD_RADIUS, 48),
+      new THREE.MeshLambertMaterial({ color: 0x3e7d3f })
+    );
+    grass.rotation.x = -Math.PI/2;
+    scene.add(grass);
+
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2f });
+    const topMat = new THREE.MeshLambertMaterial({ color: 0x2d5f34 });
+    const trunkGeo = new THREE.CylinderGeometry(2.4, 3, 46, 6);
+    const topGeo = new THREE.ConeGeometry(16, 52, 7);
+    for(let i=0;i<55;i++){
+      const a = Math.random()*Math.PI*2;
+      const r = Math.random()*WORLD_RADIUS*0.94;
+      const x = Math.cos(a)*r, z = Math.sin(a)*r;
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.position.set(x, 23, z);
+      scene.add(trunk);
+      const top = new THREE.Mesh(topGeo, topMat);
+      top.position.set(x, 60, z);
+      scene.add(top);
+    }
+
+    const rockMat = new THREE.MeshLambertMaterial({ color: 0x5a5f63 });
+    const rockGeo = new THREE.SphereGeometry(1, 6, 5);
+    for(let i=0;i<24;i++){
+      const a = Math.random()*Math.PI*2;
+      const r = Math.random()*WORLD_RADIUS*0.9;
+      const s = 8 + Math.random()*14;
+      const rock = new THREE.Mesh(rockGeo, rockMat);
+      rock.position.set(Math.cos(a)*r, s*0.4, Math.sin(a)*r);
+      rock.scale.set(s, s*0.7, s);
+      scene.add(rock);
+    }
+  }
+  buildIsland();
+
+  // storm wall — a translucent cylinder scaled to the current safe-zone radius each frame
+  const stormWallGeo = new THREE.CylinderGeometry(1, 1, 80, 40, 1, true);
+  const stormWallMat = new THREE.MeshBasicMaterial({ color: 0x4fd8ea, transparent:true, opacity:0.22, side: THREE.DoubleSide, depthWrite:false });
+  const stormWallMesh = new THREE.Mesh(stormWallGeo, stormWallMat);
+  stormWallMesh.position.y = 40;
+  scene.add(stormWallMesh);
 
   let entities = [];
   let bullets = [];
   let particles = [];
   let feedEl = document.getElementById('feed');
-  let camera = {x:0,y:0};
-  let stormCenter = {x: WORLD.w/2, y: WORLD.h/2};
+  let stormCenter = {x:0, z:0};
   let stormRadius = 1050;
   let stormTargetRadius = 1050;
   let stormPhaseTimer = 0;
@@ -438,7 +555,6 @@
     {wait: 7,  shrinkTo: 0,   shrinkTime: 6}
   ];
   let stormShrinking = false;
-  let stormTimerLabel = "";
 
   let player = null;
   let gameRunning = false;
@@ -446,6 +562,11 @@
   let endSequenceStarted = false;
   let killCount = 0;
   let startTime = 0;
+
+  // first-person camera orientation
+  let yaw = 0, pitch = 0;
+  const LOOK_SENS = 0.0045;
+  const PITCH_LIMIT = 1.3;
 
   // ---------- Pre-game phase ----------
   const PREGAME_DURATION = 5;
@@ -632,8 +753,15 @@
       localStorage.setItem(UNLOCKED_REWARDS_KEY, JSON.stringify(keys));
     }
   }
-  function openPowerBox(){
-    if(!takeBox()) return null;
+  function rollRewardCount(){
+    // 4 rewards: rare (5%), 3: kind of rare (15%), 2: not rare (30%), 1: really common (50%)
+    const r = Math.random()*100;
+    if(r < 5) return 4;
+    if(r < 20) return 3;
+    if(r < 50) return 2;
+    return 1;
+  }
+  function rollOneReward(){
     const lockedRewards = REWARD_POWERUP_TYPES.filter(t => !isRewardUnlocked(t.key));
     if(lockedRewards.length > 0 && Math.random() < 0.4){
       const type = lockedRewards[Math.floor(Math.random()*lockedRewards.length)];
@@ -643,6 +771,60 @@
     const coins = Math.floor(rand(20,60));
     addCoins(coins);
     return { kind:'coins', amount:coins };
+  }
+  function openOneBox(){
+    if(!takeBox()) return null;
+    const count = rollRewardCount();
+    const rewards = [];
+    for(let i=0;i<count;i++){ rewards.push(rollOneReward()); }
+    return rewards;
+  }
+
+  // ---------- Box modal (tap-to-open) ----------
+  let boxModalRemaining = 0;
+  function launchBoxModal(sessionCount){
+    boxModalRemaining = sessionCount;
+    resetBoxModalVisual();
+    document.getElementById('boxModal').classList.remove('hidden');
+  }
+  function resetBoxModalVisual(){
+    document.getElementById('boxIcon').classList.remove('opened');
+    document.getElementById('boxModalPrompt').textContent = 'Tap the box to open it';
+    document.getElementById('boxModalResults').classList.add('hidden');
+    document.getElementById('boxModalResults').innerHTML = '';
+    document.getElementById('boxModalButtons').classList.add('hidden');
+    document.getElementById('boxModalCount').textContent = `${boxModalRemaining} box${boxModalRemaining===1?'':'es'} ready`;
+  }
+  function handleBoxTap(){
+    if(document.getElementById('boxIcon').classList.contains('opened')) return;
+    const rewards = openOneBox();
+    if(!rewards) return;
+    document.getElementById('boxIcon').classList.add('opened');
+    const rarityLabel = rewards.length>=4 ? 'RARE!' : rewards.length===3 ? 'GREAT PULL' : rewards.length===2 ? 'NICE' : 'OPENED';
+    document.getElementById('boxModalPrompt').textContent = `${rarityLabel} — ${rewards.length} reward${rewards.length>1?'s':''}!`;
+
+    const resultsEl = document.getElementById('boxModalResults');
+    resultsEl.innerHTML = rewards.map(r=>{
+      if(r.kind === 'coins'){
+        return `<div class="box-reward-line">+${r.amount} COINS</div>`;
+      }
+      return `<div class="box-reward-line" style="color:${r.powerup.color}">UNLOCKED ${r.powerup.label}</div>`;
+    }).join('');
+    resultsEl.classList.remove('hidden');
+
+    boxModalRemaining -= 1;
+    const nextBtn = document.getElementById('boxModalNextBtn');
+    nextBtn.classList.toggle('hidden', boxModalRemaining <= 0);
+    nextBtn.textContent = `Open Next (${boxModalRemaining} left)`;
+    document.getElementById('boxModalButtons').classList.remove('hidden');
+
+    refreshLobbyExtras();
+  }
+  function closeBoxModal(){
+    document.getElementById('boxModal').classList.add('hidden');
+    renderWinTracker();
+    renderPowerupsScreen();
+    refreshLobbyExtras();
   }
 
   // ---------- Upgrades (spend coins to boost a power-up's effect, max level 5) ----------
@@ -746,16 +928,17 @@
     return { tier, rp, gain: Math.round(gain), rankedUp };
   }
   function applyRankDifficulty(bot, tier){
-    // the higher your rank, the tougher the bots
-    const hpMult = 1 + tier*0.15;
-    const dmgMultR = 1 + tier*0.12;
-    const speedMultR = 1 + tier*0.06;
-    const fireCdR = Math.max(0.55, 1 - tier*0.08);
+    // ranked-only: the higher your rank, the much tougher the bots
+    const hpMult = 1 + tier*0.28;
+    const dmgMultR = 1 + tier*0.22;
+    const speedMultR = 1 + tier*0.14;
+    const fireCdR = Math.max(0.4, 1 - tier*0.14);
     bot.maxHp = Math.round(100 * hpMult);
     bot.hp = bot.maxHp;
     bot.speed *= speedMultR;
     bot.dmgMult = (bot.dmgMult||1) * dmgMultR;
     bot.fireCdMult = (bot.fireCdMult||1) * fireCdR;
+    bot.rankTierBoost = tier; // read by AI for behavior scaling (aggro range, aim, wander)
   }
 
   let matchMode = localStorage.getItem(MODE_KEY) === 'ranked' ? 'ranked' : 'casual';
@@ -846,6 +1029,7 @@
     const collected = collectPendingBoxes();
     renderWinTracker();
     refreshLobbyExtras();
+    if(collected > 0){ launchBoxModal(collected); }
   }
 
   // ---------- Power-up loadout + upgrade screen ----------
@@ -861,17 +1045,10 @@
     renderPowerupsScreen();
   }
 
-  function handleOpenBox(){
-    const result = openPowerBox();
-    const resultEl = document.getElementById('boxResult');
-    if(!result){
-      resultEl.textContent = 'No boxes to open';
-    } else if(result.kind === 'coins'){
-      resultEl.textContent = `Box opened — +${result.amount} coins`;
-    } else {
-      resultEl.textContent = `Box opened — unlocked ${result.powerup.label}!`;
-    }
-    renderPowerupsScreen();
+  function handleOpenBoxClick(){
+    const boxes = getBoxes();
+    if(boxes <= 0) return;
+    launchBoxModal(boxes);
   }
 
   function handleBuyUpgrade(key){
@@ -932,9 +1109,8 @@
     document.getElementById('puSelectedCount').textContent = `${loadout.length} / 3 selected`;
   }
 
-
   function rand(a,b){ return a + Math.random()*(b-a); }
-  function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+  function dist(a,b){ return Math.hypot(a.x-b.x, a.z-b.z); }
   function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 
   function addFeed(text, danger){
@@ -947,25 +1123,90 @@
     while(feedEl.children.length > 5){ feedEl.removeChild(feedEl.firstChild); }
   }
 
-  // ---------- Entity factory ----------
+  // ---------- Entity factory (3D) ----------
+  const BOT_BODY_HEIGHT = 26;
+  const BOT_HEAD_RADIUS = 8;
+
+  function makeNameTexture(){
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 48;
+    return { canvas:c, ctx:c.getContext('2d'), texture:new THREE.CanvasTexture(c) };
+  }
+
+  function redrawNameTexture(e){
+    const { canvas, ctx, texture } = e.nameTex;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.font = '16px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#E8EDF0';
+    ctx.fillText(e.name, canvas.width/2, 18);
+    ctx.fillStyle = '#16232B';
+    ctx.fillRect(canvas.width/2-40, 24, 80, 8);
+    ctx.fillStyle = e.isPlayer ? '#4FD8EA' : '#FF4655';
+    ctx.fillRect(canvas.width/2-40, 24, 80*clamp(e.hp/e.maxHp,0,1), 8);
+    texture.needsUpdate = true;
+  }
+
+  function makeBotMesh(e){
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x7a1f26 });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(e.radius*0.6, e.radius*0.75, BOT_BODY_HEIGHT, 8), bodyMat);
+    body.position.y = BOT_BODY_HEIGHT/2;
+    group.add(body);
+
+    const headMat = new THREE.MeshLambertMaterial({ color: 0xd8b48c });
+    const head = new THREE.Mesh(new THREE.SphereGeometry(BOT_HEAD_RADIUS, 10, 8), headMat);
+    head.position.y = BOT_BODY_HEIGHT + BOT_HEAD_RADIUS*0.8;
+    group.add(head);
+
+    const visorMat = new THREE.MeshBasicMaterial({ color: 0xff4655 });
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(6,4,3), visorMat);
+    visor.position.set(0, BOT_BODY_HEIGHT*0.7, -e.radius*0.65);
+    group.add(visor);
+
+    e.nameTex = makeNameTexture();
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: e.nameTex.texture, transparent:true, depthTest:false }));
+    sprite.scale.set(34, 13, 1);
+    sprite.position.y = BOT_BODY_HEIGHT + BOT_HEAD_RADIUS*2 + 14;
+    group.add(sprite);
+
+    e.bodyMesh = body; e.headMesh = head; e.visorMesh = visor;
+    scene.add(group);
+    redrawNameTexture(e);
+    return group;
+  }
+
+  function disposeBotMesh(e){
+    if(!e.mesh) return;
+    scene.remove(e.mesh);
+    e.mesh.traverse(obj=>{
+      if(obj.geometry) obj.geometry.dispose && obj.geometry.dispose();
+      if(obj.material){
+        if(obj.material.map) obj.material.map.dispose && obj.material.map.dispose();
+        obj.material.dispose && obj.material.dispose();
+      }
+    });
+    e.mesh = null;
+  }
+
   function makeEntity(isPlayer, name){
     return {
       id: Math.random().toString(36).slice(2),
       name: name,
       isPlayer: isPlayer,
-      x: 0, y: 0,
-      vx:0, vy:0,
+      x: 0, z: 0,
+      vx:0, vz:0,
       facing: 0,
       hp: 100, maxHp:100,
       speed: isPlayer ? 210 : rand(165,205),
       radius: 16,
       alive: true,
       fireCooldown: 0,
-      aiState: 'roam',
       aiTimer: rand(0.5,2),
       aiTarget: null,
       hitFlash: 0,
-      powerup: null
+      powerup: null,
+      mesh: null
     };
   }
 
@@ -978,12 +1219,50 @@
       const angle = offset + i*step + rand(-step*0.15, step*0.15);
       const r = stormRadius - 6;
       e.x = stormCenter.x + Math.cos(angle)*r;
-      e.y = stormCenter.y + Math.sin(angle)*r;
+      e.z = stormCenter.z + Math.sin(angle)*r;
       e.facing = angle + Math.PI; // face inward, toward the zone
     });
   }
 
+  // ---------- Bullets & particles (3D meshes) ----------
+  const bulletGeo = new THREE.SphereGeometry(3.2, 8, 6);
+  function spawnBulletMesh(b){
+    const mat = new THREE.MeshBasicMaterial({ color: b.isPlayer ? 0x4fd8ea : 0xff9a45 });
+    b.mesh = new THREE.Mesh(bulletGeo, mat);
+    b.mesh.position.set(b.x, b.y, b.z);
+    scene.add(b.mesh);
+  }
+  function disposeBulletMesh(b){
+    if(!b.mesh) return;
+    scene.remove(b.mesh);
+    b.mesh.material.dispose();
+    b.mesh = null;
+  }
+
+  const particleGeo = new THREE.BoxGeometry(4,4,4);
+  function spawnDeathParticles(e){
+    for(let i=0;i<14;i++){
+      const a = rand(0,Math.PI*2), sp = rand(40,150);
+      const mat = new THREE.MeshBasicMaterial({ color: e.isPlayer ? 0xff4655 : 0xf5a623 });
+      const mesh = new THREE.Mesh(particleGeo, mat);
+      mesh.position.set(e.x, EYE_HEIGHT*0.6, e.z);
+      scene.add(mesh);
+      particles.push({
+        x:e.x, y:EYE_HEIGHT*0.6, z:e.z,
+        vx:Math.cos(a)*sp, vy:rand(60,140), vz:Math.sin(a)*sp,
+        life: rand(0.5,1.0), mesh
+      });
+    }
+  }
+
+  function clearMatchMeshes(){
+    for(const e of entities){ disposeBotMesh(e); }
+    for(const b of bullets){ disposeBulletMesh(b); }
+    for(const p of particles){ if(p.mesh){ scene.remove(p.mesh); p.mesh.material.dispose(); } }
+  }
+
   function spawnMatch(botCount){
+    clearMatchMeshes();
     entities = [];
     bullets = [];
     particles = [];
@@ -994,7 +1273,7 @@
     stormPhase = 0;
     stormPhaseTimer = STORM_PHASES[0].wait;
     stormShrinking = false;
-    stormCenter = {x: WORLD.w/2, y: WORLD.h/2};
+    stormCenter = {x:0, z:0};
 
     player = makeEntity(true, "YOU");
     entities.push(player);
@@ -1012,7 +1291,11 @@
       entities.forEach(e=>{ if(!e.isPlayer){ applyRankDifficulty(e, tier); } });
     }
 
-    entities.forEach(e=>{ if(e.isPlayer){ assignPlayerPowerup(e); } else { assignRandomPowerup(e); } });
+    entities.forEach(e=>{
+      if(e.isPlayer){ assignPlayerPowerup(e); } else { assignRandomPowerup(e); }
+      if(!e.isPlayer){ e.mesh = makeBotMesh(e); }
+    });
+
     const lvlTag = player.powerupLevel > 0 ? ` (Lv${player.powerupLevel})` : '';
     document.getElementById('loadoutLabel').textContent = `LOADOUT // ${player.powerup.label}${lvlTag}`;
     document.getElementById('loadoutLabel').style.color = player.powerup.color;
@@ -1021,6 +1304,9 @@
     document.getElementById('powerupRevealLabel').textContent = player.powerup.label + lvlTag;
     document.getElementById('powerupRevealLabel').style.color = player.powerup.color;
     document.getElementById('powerupRevealDesc').textContent = player.powerup.desc(player.powerupLevel);
+
+    yaw = player.facing;
+    pitch = 0;
 
     gameOver = false;
     endSequenceStarted = false;
@@ -1043,14 +1329,24 @@
     if(e.key === ' '){ fireHeld = false; }
   });
 
-  let mouse = {x:0,y:0,down:false};
-  canvas.addEventListener('mousemove', e=>{
-    mouse.x = e.clientX; mouse.y = e.clientY;
+  // Desktop: click canvas to lock pointer, then mouse-move looks around; click/Space fires
+  let pointerLocked = false;
+  canvas.addEventListener('click', ()=>{
+    if(!pointerLocked && !('ontouchstart' in window)){ canvas.requestPointerLock(); }
   });
-  canvas.addEventListener('mousedown', e=>{ mouse.down = true; fireHeld = true; });
-  window.addEventListener('mouseup', e=>{ mouse.down = false; fireHeld = false; });
+  document.addEventListener('pointerlockchange', ()=>{
+    pointerLocked = document.pointerLockElement === canvas;
+  });
+  document.addEventListener('mousemove', e=>{
+    if(!pointerLocked) return;
+    yaw -= (e.movementX||0) * LOOK_SENS;
+    pitch -= (e.movementY||0) * LOOK_SENS;
+    pitch = clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
+  });
+  canvas.addEventListener('mousedown', ()=>{ if(pointerLocked){ fireHeld = true; } });
+  window.addEventListener('mouseup', ()=>{ fireHeld = false; });
 
-  // Touch joystick
+  // Touch joystick (movement, left side)
   let joyActive = false, joyId = null, joyOrigin = {x:0,y:0}, joyVec = {x:0,y:0};
   const joyZone = document.getElementById('joyZone');
   const joyBase = document.getElementById('joyBase');
@@ -1093,84 +1389,68 @@
   joyZone.addEventListener('touchend', joyEnd);
   joyZone.addEventListener('touchcancel', joyEnd);
 
-  // Right-side drag-to-aim stick: dragging sets facing direction and fires while held
+  // Right side: drag to look (incremental deltas, like a touchpad — not a joystick)
   let fireHeld = false;
-  let aimActive = false, aimId = null, aimOrigin = {x:0,y:0}, aimAngle = null;
+  let lookActive = false, lookId = null, lookLastX = 0, lookLastY = 0;
   const fireZone = document.getElementById('fireZone');
-  const aimBase = document.getElementById('aimBase');
-  const aimStick = document.getElementById('aimStick');
-  const aimHint = document.getElementById('aimHint');
-  const AIM_DEADZONE = 12;
+  const lookHint = document.getElementById('lookHint');
 
   fireZone.addEventListener('touchstart', e=>{
     const t = e.changedTouches[0];
-    aimActive = true; aimId = t.identifier;
-    aimOrigin = {x: t.clientX, y: t.clientY};
-    aimBase.style.display = 'block';
-    aimBase.style.left = (t.clientX-50)+'px';
-    aimBase.style.top = (t.clientY-50)+'px';
-    aimStick.style.left = '50px'; aimStick.style.top = '50px';
-    aimHint.style.display = 'none';
-    fireHeld = true;
+    lookActive = true; lookId = t.identifier;
+    lookLastX = t.clientX; lookLastY = t.clientY;
+    lookHint.style.display = 'none';
     e.preventDefault();
   }, {passive:false});
 
   fireZone.addEventListener('touchmove', e=>{
     for(const t of e.changedTouches){
-      if(t.identifier === aimId){
-        let dx = t.clientX - aimOrigin.x, dy = t.clientY - aimOrigin.y;
-        const maxR = 50;
-        const d = Math.hypot(dx,dy);
-        const cdx = d > maxR ? dx/d*maxR : dx;
-        const cdy = d > maxR ? dy/d*maxR : dy;
-        aimStick.style.left = (50+cdx)+'px';
-        aimStick.style.top = (50+cdy)+'px';
-        if(d > AIM_DEADZONE){
-          aimAngle = Math.atan2(dy,dx);
-        }
+      if(t.identifier === lookId){
+        const dx = t.clientX - lookLastX, dy = t.clientY - lookLastY;
+        yaw -= dx * LOOK_SENS;
+        pitch -= dy * LOOK_SENS;
+        pitch = clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
+        lookLastX = t.clientX; lookLastY = t.clientY;
       }
     }
     e.preventDefault();
   }, {passive:false});
 
-  function aimEnd(e){
+  function lookEnd(e){
     for(const t of e.changedTouches){
-      if(t.identifier === aimId){
-        aimActive = false; aimId = null; fireHeld = false;
-        aimBase.style.display = 'none';
-      }
+      if(t.identifier === lookId){ lookActive = false; lookId = null; }
     }
   }
-  fireZone.addEventListener('touchend', aimEnd);
-  fireZone.addEventListener('touchcancel', aimEnd);
+  fireZone.addEventListener('touchend', lookEnd);
+  fireZone.addEventListener('touchcancel', lookEnd);
 
-  // Fire button (separate from the drag-to-aim stick) — fires in current facing direction
+  // Fire button — tap/hold to shoot in the direction you're looking
   const fireBtn = document.getElementById('fireBtn');
   fireBtn.addEventListener('touchstart', e=>{
     fireHeld = true; fireBtn.classList.add('active'); e.stopPropagation(); e.preventDefault();
   }, {passive:false});
   fireBtn.addEventListener('touchend', e=>{
-    if(!aimActive) fireHeld = false;
+    fireHeld = false;
     fireBtn.classList.remove('active'); e.stopPropagation(); e.preventDefault();
   }, {passive:false});
   fireBtn.addEventListener('touchcancel', e=>{
-    if(!aimActive) fireHeld = false;
+    fireHeld = false;
     fireBtn.classList.remove('active'); e.stopPropagation();
   });
 
   // ---------- Combat ----------
-  function shoot(from, angle){
+  function shoot(from, dirX, dirY, dirZ){
     const spd = 640 * (from.bulletSpeedMult||1);
     bullets.push({
-      x: from.x + Math.cos(angle)*from.radius,
-      y: from.y + Math.sin(angle)*from.radius,
-      vx: Math.cos(angle)*spd,
-      vy: Math.sin(angle)*spd,
+      x: from.x + dirX*from.radius, y: (from.eyeY||EYE_HEIGHT) + dirY*from.radius, z: from.z + dirZ*from.radius,
+      vx: dirX*spd, vy: dirY*spd, vz: dirZ*spd,
       ownerId: from.id,
       isPlayer: from.isPlayer,
       life: 1.1,
-      dmg: 16 * (from.dmgMult||1)
+      dmg: 16 * (from.dmgMult||1),
+      mesh: null
     });
+    spawnBulletMesh(bullets[bullets.length-1]);
   }
 
   function damage(target, amount, source){
@@ -1189,17 +1469,11 @@
       const place = entities.filter(e=>e.alive).length;
       target.hp = 0; target.alive = false;
       spawnDeathParticles(target);
+      disposeBotMesh(target);
       if(source && source.isPlayer){ killCount++; }
       const killerName = source ? source.name : 'THE ZONE';
       addFeed(`${target.name} eliminated by ${killerName}`, true);
       if(target.isPlayer){ triggerEnd(false, place); }
-    }
-  }
-
-  function spawnDeathParticles(e){
-    for(let i=0;i<14;i++){
-      const a = rand(0,Math.PI*2), sp = rand(60,220);
-      particles.push({x:e.x,y:e.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life: rand(0.4,0.9), color: e.isPlayer ? '#FF4655':'#F5A623'});
     }
   }
 
@@ -1209,7 +1483,7 @@
 
     if(preGame){
       // frozen at the drop line until the countdown ends
-      e.vx = 0; e.vy = 0;
+      e.vx = 0; e.vz = 0;
       return;
     }
 
@@ -1221,36 +1495,44 @@
       if(d < nd){ nd = d; nearest = o; }
     }
 
+    const rankBoost = e.rankTierBoost||0; // only set on bots in ranked matches
+    const aggroRange = 560 + rankBoost*45;
+    const spreadMax = Math.max(0.02, 0.07 - rankBoost*0.01);
+    const fireCdMin = Math.max(0.35, 0.65 - rankBoost*0.05);
+    const fireCdMax = Math.max(0.6, 1.2 - rankBoost*0.08);
+
     const inStorm = dist(e, stormCenter) > stormRadius - 20;
 
     if(inStorm){
       // run toward center
-      const a = Math.atan2(stormCenter.y-e.y, stormCenter.x-e.x);
-      e.vx = Math.cos(a)*e.speed; e.vy = Math.sin(a)*e.speed;
+      const a = Math.atan2(stormCenter.z-e.z, stormCenter.x-e.x);
+      e.vx = Math.cos(a)*e.speed; e.vz = Math.sin(a)*e.speed;
       e.facing = a;
-    } else if(nearest && nd < 560){
-      e.facing = Math.atan2(nearest.y-e.y, nearest.x-e.x);
+    } else if(nearest && nd < aggroRange){
+      e.facing = Math.atan2(nearest.z-e.z, nearest.x-e.x);
       if(nd > 220){
-        e.vx = Math.cos(e.facing)*e.speed; e.vy = Math.sin(e.facing)*e.speed;
+        e.vx = Math.cos(e.facing)*e.speed; e.vz = Math.sin(e.facing)*e.speed;
       } else if(nd < 130){
-        e.vx = -Math.cos(e.facing)*e.speed*0.6; e.vy = -Math.sin(e.facing)*e.speed*0.6;
+        e.vx = -Math.cos(e.facing)*e.speed*0.6; e.vz = -Math.sin(e.facing)*e.speed*0.6;
       } else {
-        e.vx = 0; e.vy = 0;
+        e.vx = 0; e.vz = 0;
       }
       e.fireCooldown -= dt;
       if(e.fireCooldown <= 0){
-        const spread = rand(-0.07,0.07);
-        shoot(e, e.facing + spread);
-        e.fireCooldown = rand(0.65,1.2) * (e.fireCdMult||1);
+        const spread = rand(-spreadMax, spreadMax);
+        const a2 = e.facing + spread;
+        const dx = Math.cos(a2), dz = Math.sin(a2);
+        shoot(e, dx, 0, dz);
+        e.fireCooldown = rand(fireCdMin, fireCdMax) * (e.fireCdMult||1);
       }
     } else {
       if(e.aiTimer <= 0){
-        e.aiTarget = { x: e.x + rand(-300,300), y: e.y + rand(-300,300) };
+        e.aiTarget = { x: e.x + rand(-300,300), z: e.z + rand(-300,300) };
         e.aiTimer = rand(0.8,1.8);
       }
       if(e.aiTarget){
-        const a = Math.atan2(e.aiTarget.y-e.y, e.aiTarget.x-e.x);
-        e.vx = Math.cos(a)*e.speed*0.7; e.vy = Math.sin(a)*e.speed*0.7;
+        const a = Math.atan2(e.aiTarget.z-e.z, e.aiTarget.x-e.x);
+        e.vx = Math.cos(a)*e.speed*0.7; e.vz = Math.sin(a)*e.speed*0.7;
         e.facing = a;
       }
     }
@@ -1261,7 +1543,7 @@
   function update(dt){
     if(!gameRunning || gameOver) return;
 
-    // pre-game countdown: everyone frozen on the drop line, weapons + storm locked
+    // pre-game countdown: everyone frozen on the drop line, weapons + storm locked (free look still allowed)
     if(preGame){
       preGameTimer -= dt;
       if(preGameTimer <= 0){
@@ -1303,10 +1585,10 @@
 
     const alive = entities.filter(e=>e.alive);
 
-    // player input
+    // player input — movement relative to camera yaw, look already applied continuously via drag/mouse handlers
     if(player.alive){
       if(preGame){
-        player.vx = 0; player.vy = 0;
+        player.vx = 0; player.vz = 0;
       } else {
         let mx = 0, my = 0;
         if(keys['w']||keys['arrowup']) my -= 1;
@@ -1314,25 +1596,25 @@
         if(keys['a']||keys['arrowleft']) mx -= 1;
         if(keys['d']||keys['arrowright']) mx += 1;
         if(joyActive){ mx = joyVec.x; my = joyVec.y; }
-        const mlen = Math.hypot(mx,my);
+
+        const moveForward = -my, moveRight = mx;
+        const fwdX = -Math.sin(yaw), fwdZ = -Math.cos(yaw);
+        const rightX = Math.cos(yaw), rightZ = -Math.sin(yaw);
+        const mlen = Math.hypot(moveForward, moveRight);
         if(mlen > 0.05){
-          player.vx = (mx/Math.max(mlen,1))*player.speed;
-          player.vy = (my/Math.max(mlen,1))*player.speed;
-          if(!mouse.down && !aimActive) player.facing = Math.atan2(my,mx);
+          player.vx = (fwdX*moveForward + rightX*moveRight) * player.speed;
+          player.vz = (fwdZ*moveForward + rightZ*moveRight) * player.speed;
         } else {
-          player.vx = 0; player.vy = 0;
-        }
-        // aim priority: right-side drag stick (touch) > mouse (desktop)
-        if(aimActive && aimAngle !== null){
-          player.facing = aimAngle;
-        } else if(!('ontouchstart' in window)){
-          const wx = mouse.x + camera.x, wy = mouse.y + camera.y;
-          player.facing = Math.atan2(wy-player.y, wx-player.x);
+          player.vx = 0; player.vz = 0;
         }
       }
+      player.facing = yaw;
       player.fireCooldown -= dt;
       if(!preGame && fireHeld && player.fireCooldown <= 0){
-        shoot(player, player.facing);
+        const dirX = -Math.sin(yaw)*Math.cos(pitch);
+        const dirY = Math.sin(pitch);
+        const dirZ = -Math.cos(yaw)*Math.cos(pitch);
+        shoot(player, dirX, dirY, dirZ);
         player.fireCooldown = 0.22 * (player.fireCdMult||1);
       }
     }
@@ -1343,11 +1625,11 @@
       updateBotAI(e, dt, alive);
     }
 
-    // move + storm damage
+    // move + storm damage + regen
     for(const e of alive){
-      e.x += e.vx*dt; e.y += e.vy*dt;
-      e.x = clamp(e.x, 20, WORLD.w-20);
-      e.y = clamp(e.y, 20, WORLD.h-20);
+      e.x += e.vx*dt; e.z += e.vz*dt;
+      const d = Math.hypot(e.x, e.z);
+      if(d > WORLD_RADIUS-20){ const k = (WORLD_RADIUS-20)/d; e.x *= k; e.z *= k; }
       if(e.hitFlash>0) e.hitFlash -= dt;
       if(e.regen){ e.hp = Math.min(e.maxHp, e.hp + e.regen*dt); }
 
@@ -1361,16 +1643,18 @@
 
     // bullets
     for(const b of bullets){
-      b.x += b.vx*dt; b.y += b.vy*dt;
+      b.x += b.vx*dt; b.y += b.vy*dt; b.z += b.vz*dt;
       b.life -= dt;
+      if(b.mesh){ b.mesh.position.set(b.x,b.y,b.z); }
     }
     bullets = bullets.filter(b=>{
-      if(b.life <= 0) return false;
+      if(b.life <= 0 || b.y < -20){ disposeBulletMesh(b); return false; }
       for(const e of alive){
         if(e.id === b.ownerId || !e.alive) continue;
-        if(dist(e,b) < e.radius){
+        if(dist(e,b) < e.radius+4 && b.y > -4 && b.y < BOT_BODY_HEIGHT+BOT_HEAD_RADIUS*2+6){
           const shooter = entities.find(x=>x.id===b.ownerId);
           damage(e, b.dmg, shooter);
+          disposeBulletMesh(b);
           return false;
         }
       }
@@ -1378,8 +1662,17 @@
     });
 
     // particles
-    for(const p of particles){ p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= 0.92; p.vy*=0.92; p.life -= dt; }
-    particles = particles.filter(p=>p.life>0);
+    for(const p of particles){
+      p.x += p.vx*dt; p.y += p.vy*dt; p.z += p.vz*dt;
+      p.vx *= 0.94; p.vz *= 0.94; p.vy -= 220*dt;
+      if(p.y < 0){ p.y = 0; p.vy = 0; }
+      p.life -= dt;
+      if(p.mesh){ p.mesh.position.set(p.x,p.y,p.z); p.mesh.material.opacity = clamp(p.life,0,1); p.mesh.material.transparent = true; }
+    }
+    particles = particles.filter(p=>{
+      if(p.life <= 0){ if(p.mesh){ scene.remove(p.mesh); p.mesh.material.dispose(); } return false; }
+      return true;
+    });
 
     // win check
     const stillAlive = entities.filter(e=>e.alive);
@@ -1387,11 +1680,26 @@
       triggerEnd(true, 1);
     }
 
-    // camera follows player
-    if(player){
-      camera.x = player.x - W/2;
-      camera.y = player.y - H/2;
+    // sync bot meshes
+    for(const e of entities){
+      if(e.isPlayer || !e.mesh) continue;
+      if(!e.alive) continue;
+      e.mesh.position.set(e.x, 0, e.z);
+      e.mesh.rotation.y = -e.facing + Math.PI/2;
+      redrawNameTexture(e);
+      const flashColor = e.hitFlash > 0 ? 0xffffff : 0x7a1f26;
+      e.bodyMesh.material.color.setHex(flashColor);
     }
+
+    // camera follows player (first-person)
+    camera3d.position.set(player.x, EYE_HEIGHT, player.z);
+    camera3d.rotation.y = yaw;
+    camera3d.rotation.x = pitch;
+
+    // storm wall visual
+    stormWallMesh.scale.set(Math.max(stormRadius,1), 1, Math.max(stormRadius,1));
+    stormWallMesh.position.x = stormCenter.x;
+    stormWallMesh.position.z = stormCenter.z;
 
     // HUD
     document.getElementById('aliveCount').textContent = stillAlive.length;
@@ -1408,137 +1716,50 @@
 
   // ---------- Render ----------
   function render(){
-    ctx.clearRect(0,0,W,H);
-    ctx.save();
-    ctx.translate(-camera.x, -camera.y);
-
-    // grid background
-    ctx.strokeStyle = '#16232B';
-    ctx.lineWidth = 1;
-    const gridSize = 100;
-    const startX = Math.floor(camera.x/gridSize)*gridSize;
-    const startY = Math.floor(camera.y/gridSize)*gridSize;
-    for(let x=startX; x<camera.x+W+gridSize; x+=gridSize){
-      ctx.beginPath(); ctx.moveTo(x,camera.y); ctx.lineTo(x,camera.y+H); ctx.stroke();
-    }
-    for(let y=startY; y<camera.y+H+gridSize; y+=gridSize){
-      ctx.beginPath(); ctx.moveTo(camera.x,y); ctx.lineTo(camera.x+W,y); ctx.stroke();
-    }
-
-    // world bounds
-    ctx.strokeStyle = '#23343d';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(0,0,WORLD.w,WORLD.h);
-
-    // storm — darken outside, ring
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(camera.x-10, camera.y-10, W+20, H+20);
-    ctx.arc(stormCenter.x, stormCenter.y, stormRadius, 0, Math.PI*2, true);
-    ctx.fillStyle = 'rgba(255,70,85,0.14)';
-    ctx.fill('evenodd');
-    ctx.restore();
-
-    ctx.beginPath();
-    ctx.arc(stormCenter.x, stormCenter.y, stormRadius, 0, Math.PI*2);
-    ctx.strokeStyle = '#4FD8EA';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10,8]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    if(stormShrinking && stormTargetRadius > 0){
-      ctx.beginPath();
-      ctx.arc(stormCenter.x, stormCenter.y, stormTargetRadius, 0, Math.PI*2);
-      ctx.strokeStyle = 'rgba(245,166,35,0.5)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4,6]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // particles
-    for(const p of particles){
-      ctx.globalAlpha = clamp(p.life,0,1);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x-2,p.y-2,4,4);
-    }
-    ctx.globalAlpha = 1;
-
-    // bullets
-    ctx.fillStyle = '#F5A623';
-    for(const b of bullets){
-      ctx.beginPath();
-      ctx.arc(b.x,b.y,3.5,0,Math.PI*2);
-      ctx.fill();
-    }
-
-    // entities
-    for(const e of entities){
-      if(!e.alive) continue;
-      ctx.save();
-      ctx.translate(e.x,e.y);
-
-      // facing indicator
-      ctx.rotate(e.facing);
-      ctx.fillStyle = e.isPlayer ? '#4FD8EA' : (e.hitFlash>0 ? '#fff' : '#FF4655');
-      ctx.beginPath();
-      ctx.moveTo(e.radius+8,0);
-      ctx.lineTo(-e.radius*0.4,-e.radius*0.7);
-      ctx.lineTo(-e.radius*0.4,e.radius*0.7);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-
-      ctx.save();
-      ctx.translate(e.x,e.y);
-      ctx.beginPath();
-      ctx.arc(0,0,e.radius,0,Math.PI*2);
-      ctx.fillStyle = e.hitFlash>0 ? '#ffffff' : (e.isPlayer ? '#0d2a30' : '#2a1414');
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = e.isPlayer ? '#4FD8EA' : '#FF4655';
-      ctx.stroke();
-      ctx.restore();
-
-      // name + hp
-      ctx.font = '10px "Courier New", monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#7B8A93';
-      ctx.fillText(e.name, e.x, e.y - e.radius - 14);
-      ctx.fillStyle = '#16232B';
-      ctx.fillRect(e.x-16, e.y-e.radius-10, 32, 4);
-      ctx.fillStyle = e.isPlayer ? '#4FD8EA' : '#FF4655';
-      ctx.fillRect(e.x-16, e.y-e.radius-10, 32*clamp(e.hp/e.maxHp,0,1), 4);
-    }
-
-    ctx.restore();
-
-    // minimap
+    renderer.render(scene, camera3d);
     drawMinimap();
   }
 
   function drawMinimap(){
-    const size = 120, pad = 16;
-    const mx = W - size - pad, my = H - size - pad - 8;
-    ctx.save();
-    ctx.globalAlpha = 0.85;
+    if(!minimapCtx) return;
+    const size = 120;
+    const ctx = minimapCtx;
+    ctx.clearRect(0,0,size,size);
     ctx.fillStyle = 'rgba(11,15,18,0.7)';
-    ctx.fillRect(mx,my,size,size);
+    ctx.fillRect(0,0,size,size);
     ctx.strokeStyle = '#23343d';
-    ctx.strokeRect(mx,my,size,size);
-    const scale = size / WORLD.w;
+    ctx.strokeRect(0,0,size,size);
+
+    const scale = size / (WORLD_RADIUS*2.3);
+    const cx = size/2, cy = size/2;
+
     ctx.beginPath();
-    ctx.arc(mx+stormCenter.x*scale, my+stormCenter.y*scale, stormRadius*scale, 0, Math.PI*2);
+    ctx.arc(cx, cy, WORLD_RADIUS*scale, 0, Math.PI*2);
+    ctx.strokeStyle = '#3e7d3f';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx + stormCenter.x*scale, cy + stormCenter.z*scale, stormRadius*scale, 0, Math.PI*2);
     ctx.strokeStyle = '#4FD8EA';
     ctx.lineWidth = 1;
     ctx.stroke();
+
     for(const e of entities){
       if(!e.alive) continue;
       ctx.fillStyle = e.isPlayer ? '#4FD8EA' : '#FF4655';
-      ctx.fillRect(mx+e.x*scale-2, my+e.y*scale-2, 4,4);
+      ctx.fillRect(cx + e.x*scale - 2, cy + e.z*scale - 2, 4, 4);
     }
-    ctx.restore();
+
+    if(player){
+      const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+      ctx.strokeStyle = '#4FD8EA';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + player.x*scale, cy + player.z*scale);
+      ctx.lineTo(cx + (player.x+fx*90)*scale, cy + (player.z+fz*90)*scale);
+      ctx.stroke();
+    }
   }
 
   function loop(t){
@@ -1548,6 +1769,7 @@
     render();
     requestAnimationFrame(loop);
   }
+  resize();
   requestAnimationFrame(loop);
 
   // ---------- Flow ----------
@@ -1649,7 +1871,7 @@
     renderPowerupsScreen();
     document.getElementById('powerupsOverlay').classList.remove('hidden');
   });
-  document.getElementById('puOpenBoxBtn').addEventListener('click', handleOpenBox);
+  document.getElementById('puOpenBoxBtn').addEventListener('click', handleOpenBoxClick);
   function closePowerupsScreen(){
     document.getElementById('powerupsOverlay').classList.add('hidden');
     document.getElementById('startOverlay').classList.remove('hidden');
@@ -1657,6 +1879,10 @@
   }
   document.getElementById('puBackBtn').addEventListener('click', closePowerupsScreen);
   document.getElementById('puBackBtnTop').addEventListener('click', closePowerupsScreen);
+
+  document.getElementById('boxIcon').addEventListener('click', handleBoxTap);
+  document.getElementById('boxModalNextBtn').addEventListener('click', resetBoxModalVisual);
+  document.getElementById('boxModalDoneBtn').addEventListener('click', closeBoxModal);
 
   document.getElementById('rankBtn').addEventListener('click', ()=>{
     document.getElementById('startOverlay').classList.add('hidden');
@@ -1676,7 +1902,10 @@
   refreshLobbyExtras();
 
   // prevent iOS rubber-band scrolling / double tap zoom
-  document.addEventListener('touchmove', e=>{ e.preventDefault(); }, {passive:false});
+  document.addEventListener('touchmove', e=>{
+    if(e.target.closest && e.target.closest('.scrollableOverlay')) return; // let these scroll natively
+    e.preventDefault();
+  }, {passive:false});
   document.addEventListener('gesturestart', e=>{ e.preventDefault(); });
 
 })();
