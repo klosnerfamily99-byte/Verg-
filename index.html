@@ -86,6 +86,25 @@
     font-size:10px; color:var(--amber); margin-top:6px; letter-spacing:2px; text-transform:uppercase;
   }
 
+  #hotbar{
+    position:absolute; left:50%; bottom:calc(16px + env(safe-area-inset-bottom));
+    transform:translateX(-50%); z-index:6; display:flex; gap:6px; pointer-events:none;
+  }
+  .hotbar-slot{
+    pointer-events:auto; border:1px solid var(--grid); background:rgba(11,15,18,0.6);
+    padding:6px 9px; text-align:center; cursor:pointer; min-width:44px;
+  }
+  .hotbar-slot.active{ border-color:var(--amber); background:rgba(245,166,35,0.18); }
+  .hotbar-num{ font-size:9px; color:var(--dim); letter-spacing:1px; }
+  .hotbar-name{ font-size:9px; letter-spacing:0.5px; text-transform:uppercase; margin-top:2px; }
+
+  #camToggleBtn{
+    position:absolute; top:calc(64px + env(safe-area-inset-top)); left:16px; z-index:6;
+    background:rgba(11,15,18,0.55); border:1px solid var(--grid); color:var(--dim);
+    font-family:inherit; font-size:9px; letter-spacing:1px; text-transform:uppercase;
+    padding:6px 10px; cursor:pointer;
+  }
+
   /* ---- Kill feed ---- */
   #feed{
     position:absolute; top:64px; right:16px; z-index:5;
@@ -331,10 +350,12 @@
     <div id="loadoutLabel">LOADOUT // —</div>
   </div>
 
+  <div id="hotbar"></div>
+  <button id="camToggleBtn">1ST PERSON</button>
+
   <div id="joyZone"><div id="joyBase"><div id="joyStick"></div></div></div>
-  <div id="fireZone"></div>
+  <div id="fireZone"><div id="fireBtn">FIRE</div></div>
   <div id="lookHint">Drag to look</div>
-  <div id="fireBtn">FIRE</div>
 
   <div class="overlay" id="startOverlay">
     <h1 class="title">VER<span>GE</span></h1>
@@ -362,6 +383,7 @@
     <div class="hint">Desktop: WASD to move, click the screen once then move the mouse to look, Space or click to fire.<br>
     Mobile: left thumb to move, drag anywhere on the right to look around, tap FIRE to shoot where you're looking.<br>
     Everyone drops in lined up on the edge of the island's safe zone — you can't move until the 5-second countdown hits zero. Each player spawns already holding one random power-up, revealed to you as the countdown runs.<br>
+    The island is bigger now — a full match runs about 5 minutes. Forests and rocks ring the outside; a city sits in the middle where you can find SMGs, rifles, shotguns, and sniper rifles lying around (everyone starts with just a pistol).<br>
     Stay inside the cyan wall. Last one standing wins.<br>
     Casual: 1st +3 wins · 2nd +2 · 3rd +1 · 4th +0 · 5th and below lose wins. Every 10 wins (then every 20 past 50) earns a Power Box — open it for coins or a rare power-up, and spend coins to upgrade any power-up up to 5 times.<br>
     Ranked: climb Bronze → Silver → Gold → Platinum → Diamond → Champion. Higher ranks face tougher bots, and rewards shrink each promotion.</div>
@@ -442,9 +464,9 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x8fd0ff);
-  scene.fog = new THREE.Fog(0x8fd0ff, 900, 2200);
+  scene.fog = new THREE.Fog(0x8fd0ff, 1900, 4600);
 
-  const camera3d = new THREE.PerspectiveCamera(75, 1, 0.1, 3000);
+  const camera3d = new THREE.PerspectiveCamera(75, 1, 0.1, 6000);
   const EYE_HEIGHT = 30;
   camera3d.rotation.order = 'YXZ';
   camera3d.position.set(0, EYE_HEIGHT, 0);
@@ -473,12 +495,98 @@
   window.addEventListener('resize', resize);
 
   // ---------- World / island ----------
-  const WORLD_RADIUS = 1300;
+  const WORLD_RADIUS = 2600;
+  const CITY_RADIUS = WORLD_RADIUS * 0.32;
   const BOT_NAMES = ["RVN","ECHO","JAX","VESTA","KILO","NULL","ORCA","IRIS","GRIT","SABLE","ZERO","MOTH","FLINT","AXIS","PRISM","HOLLOW"];
+
+  let wallColliders = [];     // {x, z, halfX, halfZ} AABB segments used for movement collision
+  let buildingFootprints = []; // {x, z, radius} simple circles used only for pickup-placement rejection
+
+  function addWallSegment(cx, cz, halfX, halfZ, height, mat){
+    if(halfX <= 2 || halfZ <= 2) return; // skip degenerate slivers
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(halfX*2, height, halfZ*2), mat);
+    mesh.position.set(cx, height/2, cz);
+    scene.add(mesh);
+    wallColliders.push({ x:cx, z:cz, halfX, halfZ });
+  }
+
+  function buildBuilding(x, z, halfW, halfD, height, mat, roofMat, doorSide){
+    const halfT = 6;   // wall thickness / 2
+    const doorHalf = 34; // half-width of the doorway opening
+
+    const northZ = z+halfD, southZ = z-halfD;
+    if(doorSide===0 && halfW>doorHalf+6){
+      addWallSegment(x-(halfW+doorHalf)/2, northZ, (halfW-doorHalf)/2, halfT, height, mat);
+      addWallSegment(x+(halfW+doorHalf)/2, northZ, (halfW-doorHalf)/2, halfT, height, mat);
+    } else {
+      addWallSegment(x, northZ, halfW, halfT, height, mat);
+    }
+    if(doorSide===1 && halfW>doorHalf+6){
+      addWallSegment(x-(halfW+doorHalf)/2, southZ, (halfW-doorHalf)/2, halfT, height, mat);
+      addWallSegment(x+(halfW+doorHalf)/2, southZ, (halfW-doorHalf)/2, halfT, height, mat);
+    } else {
+      addWallSegment(x, southZ, halfW, halfT, height, mat);
+    }
+
+    const eastX = x+halfW, westX = x-halfW;
+    if(doorSide===2 && halfD>doorHalf+6){
+      addWallSegment(eastX, z-(halfD+doorHalf)/2, halfT, (halfD-doorHalf)/2, height, mat);
+      addWallSegment(eastX, z+(halfD+doorHalf)/2, halfT, (halfD-doorHalf)/2, height, mat);
+    } else {
+      addWallSegment(eastX, z, halfT, halfD, height, mat);
+    }
+    if(doorSide===3 && halfD>doorHalf+6){
+      addWallSegment(westX, z-(halfD+doorHalf)/2, halfT, (halfD-doorHalf)/2, height, mat);
+      addWallSegment(westX, z+(halfD+doorHalf)/2, halfT, (halfD-doorHalf)/2, height, mat);
+    } else {
+      addWallSegment(westX, z, halfT, halfD, height, mat);
+    }
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(halfW*2+6, 6, halfD*2+6), roofMat);
+    roof.position.set(x, height+3, z);
+    scene.add(roof);
+
+    // darker interior floor patch so the inside reads distinctly once you step through the door
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(halfW*2-halfT*2, halfD*2-halfT*2), new THREE.MeshLambertMaterial({ color:0x2c2f33 }));
+    floor.rotation.x = -Math.PI/2;
+    floor.position.set(x, 0.15, z);
+    scene.add(floor);
+
+    buildingFootprints.push({ x, z, radius: Math.max(halfW,halfD)+20 });
+  }
+
+  function buildCity(){
+    const spacing = 230; // bigger buildings need more room between them
+    const streetEvery = 3; // skip every 3rd row/col to form streets
+    const cols = Math.ceil((CITY_RADIUS*2) / spacing);
+    const roofMat = new THREE.MeshLambertMaterial({ color:0x2b2f33 });
+    for(let cx=-cols; cx<=cols; cx++){
+      for(let cz=-cols; cz<=cols; cz++){
+        if(cx % streetEvery === 0 || cz % streetEvery === 0) continue; // leave streets clear
+        const x = cx*spacing + rand(-14,14);
+        const z = cz*spacing + rand(-14,14);
+        if(Math.hypot(x,z) > CITY_RADIUS*0.92) continue;
+        const halfW = rand(55,90), halfD = rand(55,90);
+        const height = rand(90, 320);
+        const shade = Math.floor(rand(70,140));
+        const mat = new THREE.MeshLambertMaterial({ color: (shade<<16)|(shade<<8)|(shade+10) });
+        const doorSide = Math.floor(rand(0,4));
+        buildBuilding(x, z, halfW, halfD, height, mat, roofMat, doorSide);
+      }
+    }
+    // flat street/plaza ground tint under the city so it reads distinctly from the grass
+    const plaza = new THREE.Mesh(
+      new THREE.CircleGeometry(CITY_RADIUS*1.05, 48),
+      new THREE.MeshLambertMaterial({ color: 0x5c5f63 })
+    );
+    plaza.rotation.x = -Math.PI/2;
+    plaza.position.y = 0.05;
+    scene.add(plaza);
+  }
 
   function buildIsland(){
     const ocean = new THREE.Mesh(
-      new THREE.PlaneGeometry(24000, 24000),
+      new THREE.PlaneGeometry(48000, 48000),
       new THREE.MeshLambertMaterial({ color: 0x2f7bb0 })
     );
     ocean.rotation.x = -Math.PI/2;
@@ -486,7 +594,7 @@
     scene.add(ocean);
 
     const sand = new THREE.Mesh(
-      new THREE.CircleGeometry(WORLD_RADIUS*1.18, 48),
+      new THREE.CircleGeometry(WORLD_RADIUS*1.18, 56),
       new THREE.MeshLambertMaterial({ color: 0xdccb8a })
     );
     sand.rotation.x = -Math.PI/2;
@@ -494,34 +602,41 @@
     scene.add(sand);
 
     const grass = new THREE.Mesh(
-      new THREE.CircleGeometry(WORLD_RADIUS, 48),
+      new THREE.CircleGeometry(WORLD_RADIUS, 56),
       new THREE.MeshLambertMaterial({ color: 0x3e7d3f })
     );
     grass.rotation.x = -Math.PI/2;
     scene.add(grass);
 
+    buildCity();
+
+    // trees and rocks live only in the outer ring, outside the city
     const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2f });
     const topMat = new THREE.MeshLambertMaterial({ color: 0x2d5f34 });
     const trunkGeo = new THREE.CylinderGeometry(2.4, 3, 46, 6);
     const topGeo = new THREE.ConeGeometry(16, 52, 7);
-    for(let i=0;i<55;i++){
+    for(let i=0;i<140;i++){
       const a = Math.random()*Math.PI*2;
-      const r = Math.random()*WORLD_RADIUS*0.94;
+      const r = rand(CITY_RADIUS*1.15, WORLD_RADIUS*0.95);
       const x = Math.cos(a)*r, z = Math.sin(a)*r;
+      const scaleY = rand(0.55, 2.1); // taller ones and shorter ones
+      const girth = rand(0.8, 1.35);
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-      trunk.position.set(x, 23, z);
+      trunk.scale.set(girth, scaleY, girth);
+      trunk.position.set(x, 23*scaleY, z);
       scene.add(trunk);
       const top = new THREE.Mesh(topGeo, topMat);
-      top.position.set(x, 60, z);
+      top.scale.set(girth, scaleY, girth);
+      top.position.set(x, 60*scaleY, z);
       scene.add(top);
     }
 
     const rockMat = new THREE.MeshLambertMaterial({ color: 0x5a5f63 });
     const rockGeo = new THREE.SphereGeometry(1, 6, 5);
-    for(let i=0;i<24;i++){
+    for(let i=0;i<60;i++){
       const a = Math.random()*Math.PI*2;
-      const r = Math.random()*WORLD_RADIUS*0.9;
-      const s = 8 + Math.random()*14;
+      const r = rand(CITY_RADIUS*1.1, WORLD_RADIUS*0.92);
+      const s = 8 + Math.random()*16;
       const rock = new THREE.Mesh(rockGeo, rockMat);
       rock.position.set(Math.cos(a)*r, s*0.4, Math.sin(a)*r);
       rock.scale.set(s, s*0.7, s);
@@ -531,10 +646,10 @@
   buildIsland();
 
   // storm wall — a translucent cylinder scaled to the current safe-zone radius each frame
-  const stormWallGeo = new THREE.CylinderGeometry(1, 1, 80, 40, 1, true);
+  const stormWallGeo = new THREE.CylinderGeometry(1, 1, 120, 40, 1, true);
   const stormWallMat = new THREE.MeshBasicMaterial({ color: 0x4fd8ea, transparent:true, opacity:0.22, side: THREE.DoubleSide, depthWrite:false });
   const stormWallMesh = new THREE.Mesh(stormWallGeo, stormWallMat);
-  stormWallMesh.position.y = 40;
+  stormWallMesh.position.y = 60;
   scene.add(stormWallMesh);
 
   let entities = [];
@@ -542,17 +657,18 @@
   let particles = [];
   let feedEl = document.getElementById('feed');
   let stormCenter = {x:0, z:0};
-  let stormRadius = 1050;
-  let stormTargetRadius = 1050;
+  let stormRadius = 2100;
+  let stormTargetRadius = 2100;
   let stormPhaseTimer = 0;
   let stormPhase = 0;
+  // Scaled up for a bigger map — a full match runs roughly 5 minutes start to finish.
   const STORM_PHASES = [
-    {wait: 14, shrinkTo: 780, shrinkTime: 10},
-    {wait: 12, shrinkTo: 540, shrinkTime: 9},
-    {wait: 10, shrinkTo: 340, shrinkTime: 8},
-    {wait: 9,  shrinkTo: 190, shrinkTime: 7},
-    {wait: 8,  shrinkTo: 90,  shrinkTime: 6},
-    {wait: 7,  shrinkTo: 0,   shrinkTime: 6}
+    {wait: 40, shrinkTo: 1550, shrinkTime: 30},
+    {wait: 35, shrinkTo: 1080, shrinkTime: 28},
+    {wait: 30, shrinkTo: 680,  shrinkTime: 24},
+    {wait: 26, shrinkTo: 380,  shrinkTime: 20},
+    {wait: 22, shrinkTo: 180,  shrinkTime: 16},
+    {wait: 18, shrinkTo: 0,    shrinkTime: 14}
   ];
   let stormShrinking = false;
 
@@ -637,6 +753,18 @@
   ];
 
   const ALL_POWERUP_TYPES = POWERUP_TYPES.concat(REWARD_POWERUP_TYPES);
+
+  // ---------- Weapons ----------
+  // Everyone starts with the pistol. Better guns are found only as pickups in the city.
+  const WEAPON_TYPES = [
+    { key:'pistol',  label:'PISTOL',  color:'#9AA5AC', dmg:16, fireCooldown:0.22, bulletSpeed:640,  pellets:1, spread:0 },
+    { key:'smg',     label:'SMG',     color:'#4FD8EA', dmg:10, fireCooldown:0.10, bulletSpeed:620,  pellets:1, spread:0.03 },
+    { key:'rifle',   label:'RIFLE',   color:'#7CF29C', dmg:22, fireCooldown:0.16, bulletSpeed:760,  pellets:1, spread:0.015 },
+    { key:'shotgun', label:'SHOTGUN', color:'#FF7A45', dmg:9,  fireCooldown:0.55, bulletSpeed:560,  pellets:5, spread:0.09 },
+    { key:'sniper',  label:'SNIPER',  color:'#FFD60A', dmg:55, fireCooldown:0.85, bulletSpeed:1000, pellets:1, spread:0.003 }
+  ];
+  const PISTOL = WEAPON_TYPES[0];
+  const CITY_WEAPON_TYPES = WEAPON_TYPES.slice(1); // the 4 guns you can actually find
 
   function assignRandomPowerup(e, pool){
     const list = pool || POWERUP_TYPES;
@@ -1189,6 +1317,30 @@
     e.mesh = null;
   }
 
+  // ---------- Third-person camera toggle ----------
+  let cameraMode = 'first'; // 'first' | 'third'
+  const playerBodyGroup = new THREE.Group();
+  const playerBody = new THREE.Mesh(
+    new THREE.CylinderGeometry(10, 12, BOT_BODY_HEIGHT, 8),
+    new THREE.MeshLambertMaterial({ color: 0x2f8fa3 })
+  );
+  playerBody.position.y = BOT_BODY_HEIGHT/2;
+  playerBodyGroup.add(playerBody);
+  const playerHead = new THREE.Mesh(
+    new THREE.SphereGeometry(BOT_HEAD_RADIUS, 10, 8),
+    new THREE.MeshLambertMaterial({ color: 0xd8b48c })
+  );
+  playerHead.position.y = BOT_BODY_HEIGHT + BOT_HEAD_RADIUS*0.8;
+  playerBodyGroup.add(playerHead);
+  playerBodyGroup.visible = false;
+  scene.add(playerBodyGroup);
+
+  function setCameraMode(mode){
+    cameraMode = mode;
+    playerBodyGroup.visible = (mode === 'third');
+    document.getElementById('camToggleBtn').textContent = mode === 'third' ? '3RD PERSON' : '1ST PERSON';
+  }
+
   function makeEntity(isPlayer, name){
     return {
       id: Math.random().toString(36).slice(2),
@@ -1206,6 +1358,8 @@
       aiTarget: null,
       hitFlash: 0,
       powerup: null,
+      weapon: PISTOL,
+      weapons: [PISTOL],
       mesh: null
     };
   }
@@ -1259,6 +1413,54 @@
     for(const e of entities){ disposeBotMesh(e); }
     for(const b of bullets){ disposeBulletMesh(b); }
     for(const p of particles){ if(p.mesh){ scene.remove(p.mesh); p.mesh.material.dispose(); } }
+    for(const wp of weaponPickups){ if(wp.mesh){ scene.remove(wp.mesh); wp.mesh.material.dispose(); } }
+  }
+
+  // ---------- Weapon pickups (city only) ----------
+  let weaponPickups = [];
+  const pickupGeo = new THREE.OctahedronGeometry(11, 0);
+  function spawnWeaponPickups(count){
+    for(let i=0;i<count;i++){
+      const type = CITY_WEAPON_TYPES[i % CITY_WEAPON_TYPES.length];
+      let x=0, z=0, ok=false;
+      for(let tries=0; tries<12 && !ok; tries++){
+        const a = rand(0,Math.PI*2), r = rand(0, CITY_RADIUS*0.88);
+        x = Math.cos(a)*r; z = Math.sin(a)*r;
+        ok = !buildingFootprints.some(b => Math.hypot(x-b.x, z-b.z) < b.radius+18);
+      }
+      const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(type.color).getHex() });
+      const mesh = new THREE.Mesh(pickupGeo, mat);
+      mesh.position.set(x, 20, z);
+      scene.add(mesh);
+      weaponPickups.push({ x, z, type, taken:false, mesh, spin: rand(0,Math.PI*2) });
+    }
+  }
+
+  // ---------- Weapon hotbar ----------
+  function addToPlayerInventory(type){
+    if(!player.weapons.find(w=>w.key===type.key)){
+      player.weapons.push(type);
+    }
+    player.weapon = type; // auto-equip whatever you just picked up
+    renderHotbar();
+  }
+  function switchToWeapon(idx){
+    if(!player || idx<0 || idx>=player.weapons.length) return;
+    player.weapon = player.weapons[idx];
+    renderHotbar();
+  }
+  function renderHotbar(){
+    const hb = document.getElementById('hotbar');
+    hb.innerHTML = '';
+    player.weapons.forEach((w,i)=>{
+      const slot = document.createElement('div');
+      slot.className = 'hotbar-slot' + (player.weapon.key===w.key ? ' active' : '');
+      slot.style.borderColor = player.weapon.key===w.key ? w.color : '';
+      slot.innerHTML = `<div class="hotbar-num">${i+1}</div><div class="hotbar-name" style="color:${w.color}">${w.label}</div>`;
+      slot.addEventListener('click', ()=>switchToWeapon(i));
+      slot.addEventListener('touchstart', (ev)=>{ ev.preventDefault(); switchToWeapon(i); }, {passive:false});
+      hb.appendChild(slot);
+    });
   }
 
   function spawnMatch(botCount){
@@ -1266,14 +1468,16 @@
     entities = [];
     bullets = [];
     particles = [];
+    weaponPickups = [];
     feedEl.innerHTML = '';
     killCount = 0;
-    stormRadius = 1050;
-    stormTargetRadius = 1050;
+    stormRadius = 2100;
+    stormTargetRadius = 2100;
     stormPhase = 0;
     stormPhaseTimer = STORM_PHASES[0].wait;
     stormShrinking = false;
     stormCenter = {x:0, z:0};
+    spawnWeaponPickups(14);
 
     player = makeEntity(true, "YOU");
     entities.push(player);
@@ -1305,6 +1509,8 @@
     document.getElementById('powerupRevealLabel').style.color = player.powerup.color;
     document.getElementById('powerupRevealDesc').textContent = player.powerup.desc(player.powerupLevel);
 
+    renderHotbar();
+
     yaw = player.facing;
     pitch = 0;
 
@@ -1323,6 +1529,7 @@
   window.addEventListener('keydown', e=>{
     keys[e.key.toLowerCase()] = true;
     if(e.key === ' '){ fireHeld = true; e.preventDefault(); }
+    if(e.key >= '1' && e.key <= '5'){ switchToWeapon(parseInt(e.key,10)-1); }
   });
   window.addEventListener('keyup', e=>{
     keys[e.key.toLowerCase()] = false;
@@ -1424,33 +1631,48 @@
   fireZone.addEventListener('touchend', lookEnd);
   fireZone.addEventListener('touchcancel', lookEnd);
 
-  // Fire button — tap/hold to shoot in the direction you're looking
+  // Fire button — tap/hold to shoot in the direction you're looking.
+  // Deliberately lets touchstart bubble up to fireZone (no stopPropagation): if the user's thumb
+  // starts on the button and then drags, the look-drag still picks it up instead of going dead.
   const fireBtn = document.getElementById('fireBtn');
   fireBtn.addEventListener('touchstart', e=>{
-    fireHeld = true; fireBtn.classList.add('active'); e.stopPropagation(); e.preventDefault();
+    fireHeld = true; fireBtn.classList.add('active'); e.preventDefault();
   }, {passive:false});
   fireBtn.addEventListener('touchend', e=>{
     fireHeld = false;
-    fireBtn.classList.remove('active'); e.stopPropagation(); e.preventDefault();
+    fireBtn.classList.remove('active'); e.preventDefault();
   }, {passive:false});
   fireBtn.addEventListener('touchcancel', e=>{
     fireHeld = false;
-    fireBtn.classList.remove('active'); e.stopPropagation();
+    fireBtn.classList.remove('active');
   });
 
   // ---------- Combat ----------
   function shoot(from, dirX, dirY, dirZ){
-    const spd = 640 * (from.bulletSpeedMult||1);
-    bullets.push({
-      x: from.x + dirX*from.radius, y: (from.eyeY||EYE_HEIGHT) + dirY*from.radius, z: from.z + dirZ*from.radius,
-      vx: dirX*spd, vy: dirY*spd, vz: dirZ*spd,
-      ownerId: from.id,
-      isPlayer: from.isPlayer,
-      life: 1.1,
-      dmg: 16 * (from.dmgMult||1),
-      mesh: null
-    });
-    spawnBulletMesh(bullets[bullets.length-1]);
+    const weapon = from.weapon || PISTOL;
+    const spd = weapon.bulletSpeed * (from.bulletSpeedMult||1);
+    const dmgPerPellet = weapon.dmg * (from.dmgMult||1);
+    const pellets = weapon.pellets||1;
+    for(let i=0;i<pellets;i++){
+      let dx=dirX, dy=dirY, dz=dirZ;
+      if(weapon.spread>0){
+        dx += rand(-weapon.spread, weapon.spread);
+        dy += rand(-weapon.spread*0.5, weapon.spread*0.5);
+        dz += rand(-weapon.spread, weapon.spread);
+        const len = Math.hypot(dx,dy,dz) || 1;
+        dx/=len; dy/=len; dz/=len;
+      }
+      bullets.push({
+        x: from.x + dx*from.radius, y: (from.eyeY||EYE_HEIGHT) + dy*from.radius, z: from.z + dz*from.radius,
+        vx: dx*spd, vy: dy*spd, vz: dz*spd,
+        ownerId: from.id,
+        isPlayer: from.isPlayer,
+        life: 1.1,
+        dmg: dmgPerPellet,
+        mesh: null
+      });
+      spawnBulletMesh(bullets[bullets.length-1]);
+    }
   }
 
   function damage(target, amount, source){
@@ -1615,7 +1837,7 @@
         const dirY = Math.sin(pitch);
         const dirZ = -Math.cos(yaw)*Math.cos(pitch);
         shoot(player, dirX, dirY, dirZ);
-        player.fireCooldown = 0.22 * (player.fireCdMult||1);
+        player.fireCooldown = (player.weapon||PISTOL).fireCooldown * (player.fireCdMult||1);
       }
     }
 
@@ -1630,6 +1852,32 @@
       e.x += e.vx*dt; e.z += e.vz*dt;
       const d = Math.hypot(e.x, e.z);
       if(d > WORLD_RADIUS-20){ const k = (WORLD_RADIUS-20)/d; e.x *= k; e.z *= k; }
+
+      // wall collision — AABB-vs-circle push-out against each wall segment (doorway gaps stay open)
+      for(const w of wallColliders){
+        const cx = clamp(e.x, w.x-w.halfX, w.x+w.halfX);
+        const cz = clamp(e.z, w.z-w.halfZ, w.z+w.halfZ);
+        const dx = e.x-cx, dz = e.z-cz;
+        const distSq = dx*dx + dz*dz;
+        const r = e.radius;
+        if(distSq < r*r){
+          const dlen = Math.sqrt(distSq) || 0.001;
+          const push = (r-dlen)/dlen;
+          e.x += dx*push; e.z += dz*push;
+        }
+      }
+
+      // weapon pickups (city only) — first entity to walk over one equips it
+      for(const wp of weaponPickups){
+        if(wp.taken) continue;
+        if(Math.hypot(e.x-wp.x, e.z-wp.z) < e.radius + 16){
+          wp.taken = true;
+          if(e.isPlayer){ addToPlayerInventory(wp.type); } else { e.weapon = wp.type; }
+          addFeed(`${e.name} picked up a ${wp.type.label}`, false);
+          if(wp.mesh){ scene.remove(wp.mesh); wp.mesh.material.dispose(); wp.mesh = null; }
+        }
+      }
+
       if(e.hitFlash>0) e.hitFlash -= dt;
       if(e.regen){ e.hp = Math.min(e.maxHp, e.hp + e.regen*dt); }
 
@@ -1639,6 +1887,13 @@
           damage(e, 8*dt, null);
         }
       }
+    }
+    weaponPickups = weaponPickups.filter(wp=>!wp.taken);
+
+    // spin weapon pickups for visual flair
+    for(const wp of weaponPickups){
+      wp.spin += dt*1.4;
+      if(wp.mesh){ wp.mesh.rotation.y = wp.spin; wp.mesh.position.y = 20 + Math.sin(wp.spin*1.3)*4; }
     }
 
     // bullets
@@ -1691,8 +1946,18 @@
       e.bodyMesh.material.color.setHex(flashColor);
     }
 
-    // camera follows player (first-person)
-    camera3d.position.set(player.x, EYE_HEIGHT, player.z);
+    // player body mesh (only visible in third-person)
+    playerBodyGroup.position.set(player.x, 0, player.z);
+    playerBodyGroup.rotation.y = -yaw + Math.PI/2;
+
+    // camera follows player
+    if(cameraMode === 'third'){
+      const backDist = 130, upDist = 60;
+      const fwdX = -Math.sin(yaw), fwdZ = -Math.cos(yaw);
+      camera3d.position.set(player.x - fwdX*backDist, EYE_HEIGHT + upDist, player.z - fwdZ*backDist);
+    } else {
+      camera3d.position.set(player.x, EYE_HEIGHT, player.z);
+    }
     camera3d.rotation.y = yaw;
     camera3d.rotation.x = pitch;
 
@@ -1898,6 +2163,10 @@
   document.getElementById('modeCasualBtn').addEventListener('click', ()=>setMatchMode('casual'));
   document.getElementById('modeRankedBtn').addEventListener('click', ()=>setMatchMode('ranked'));
   updateModeButtons();
+
+  document.getElementById('camToggleBtn').addEventListener('click', ()=>{
+    setCameraMode(cameraMode === 'first' ? 'third' : 'first');
+  });
 
   refreshLobbyExtras();
 
