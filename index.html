@@ -34,6 +34,19 @@
     padding-right:env(safe-area-inset-right);
   }
   #game{ display:block; width:100%; height:100%; background:#8fd0ff; }
+  #rotatePrompt{
+    display:none;
+    position:fixed; inset:0; z-index:999;
+    background:#0B0F12;
+    flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; color:var(--ink); font-size:14px; letter-spacing:1px;
+    padding:24px; line-height:1.6;
+  }
+  #rotateIcon{ font-size:48px; color:var(--amber); margin-bottom:18px; animation: pulseNum 1.4s infinite; }
+  @media (orientation: portrait){
+    #rotatePrompt{ display:flex; }
+    #wrap > *:not(#rotatePrompt){ visibility:hidden; }
+  }
   #minimap{
     position:absolute; right:16px; bottom:calc(24px + env(safe-area-inset-bottom));
     width:120px; height:120px; z-index:4; border:1px solid var(--grid);
@@ -88,15 +101,15 @@
 
   #hotbar{
     position:absolute; left:50%; bottom:calc(16px + env(safe-area-inset-bottom));
-    transform:translateX(-50%); z-index:6; display:flex; gap:6px; pointer-events:none;
+    transform:translateX(-50%); z-index:12; display:flex; gap:4px; pointer-events:none;
   }
   .hotbar-slot{
-    pointer-events:auto; border:1px solid var(--grid); background:rgba(11,15,18,0.6);
-    padding:6px 9px; text-align:center; cursor:pointer; min-width:44px;
+    pointer-events:auto; border:1px solid var(--grid); background:rgba(11,15,18,0.75);
+    padding:5px 7px; text-align:center; cursor:pointer; min-width:36px;
   }
-  .hotbar-slot.active{ border-color:var(--amber); background:rgba(245,166,35,0.18); }
-  .hotbar-num{ font-size:9px; color:var(--dim); letter-spacing:1px; }
-  .hotbar-name{ font-size:9px; letter-spacing:0.5px; text-transform:uppercase; margin-top:2px; }
+  .hotbar-slot.active{ border-color:var(--amber); background:rgba(245,166,35,0.22); }
+  .hotbar-num{ font-size:8px; color:var(--dim); letter-spacing:1px; }
+  .hotbar-name{ font-size:8px; letter-spacing:0.5px; text-transform:uppercase; margin-top:2px; }
 
   #camToggleBtn{
     position:absolute; top:calc(64px + env(safe-area-inset-top)); left:16px; z-index:6;
@@ -179,6 +192,31 @@
   }
   .hidden{ display:none !important; }
   .scrollableOverlay{ touch-action:pan-y; }
+
+  .greenGlow{
+    background:#0d2a1a;
+    overflow:hidden;
+  }
+  .greenGlow::before{
+    content:'';
+    position:absolute;
+    top:50%; left:50%;
+    width:220vmax; height:220vmax;
+    margin-left:-110vmax; margin-top:-110vmax;
+    background: conic-gradient(from 0deg,
+      rgba(124,242,156,0.38) 0deg, transparent 35deg,
+      transparent 325deg, rgba(124,242,156,0.38) 360deg);
+    animation: spinLight 7s linear infinite;
+    z-index:0;
+  }
+  .greenGlow > *{ position:relative; z-index:1; }
+  @keyframes spinLight{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+
+  #playerPreview{
+    width:120px; height:160px; margin-bottom:18px;
+    border:1px solid var(--grid); background:rgba(0,0,0,0.2);
+  }
+
   #boxModal{ z-index:30; }
   #boxModalCount{ font-size:11px; color:var(--dim); letter-spacing:2px; margin-bottom:18px; text-transform:uppercase; }
   #boxIcon{
@@ -323,6 +361,10 @@
 </head>
 <body>
 <div id="wrap">
+  <div id="rotatePrompt">
+    <div id="rotateIcon">⟳</div>
+    <div>Rotate your device to landscape<br>to play VERGE</div>
+  </div>
   <canvas id="game"></canvas>
   <canvas id="minimap"></canvas>
   <div id="crosshair"></div>
@@ -357,9 +399,10 @@
   <div id="fireZone"><div id="fireBtn">FIRE</div></div>
   <div id="lookHint">Drag to look</div>
 
-  <div class="overlay" id="startOverlay">
+  <div class="overlay greenGlow" id="startOverlay">
     <h1 class="title">VER<span>GE</span></h1>
     <div class="subtitle">a first-person battle royale — island, v1</div>
+    <canvas id="playerPreview"></canvas>
     <div class="lobbyCardRow">
       <div class="lobbyCard" id="winTrackerBtn">
         <div class="lobbyCardLabel">Win Tracker</div>
@@ -414,7 +457,7 @@
     <button class="playbtn secondary" id="rankBackBtn">Back</button>
   </div>
 
-  <div class="overlay hidden scrollableOverlay" id="winTrackerOverlay">
+  <div class="overlay hidden scrollableOverlay greenGlow" id="winTrackerOverlay">
     <div class="subtitle">WIN TRACKER</div>
     <div id="wtTotal">0<span>wins</span></div>
     <div id="wtBarWrap">
@@ -427,7 +470,7 @@
     <button class="playbtn secondary" id="wtBackBtn">Back</button>
   </div>
 
-  <div class="overlay hidden scrollableOverlay" id="powerupsOverlay">
+  <div class="overlay hidden scrollableOverlay greenGlow" id="powerupsOverlay">
     <button class="playbtn secondary" id="puBackBtnTop">Back</button>
     <div class="subtitle">CHOOSE 3 POWER-UPS</div>
     <div id="puCurrency">Coins: 0    Boxes: 0</div>
@@ -1252,8 +1295,65 @@
   }
 
   // ---------- Entity factory (3D) ----------
-  const BOT_BODY_HEIGHT = 26;
-  const BOT_HEAD_RADIUS = 8;
+  // A simple articulated low-poly humanoid (torso, head, two-segment arms and legs) with a
+  // procedural walk/idle animation — not photorealistic, but reads as a person in motion.
+  const HUMANOID_LEG_LEN = 9, HUMANOID_UPPER_LEG_LEN = 10;
+  const HUMANOID_HIP_Y = HUMANOID_LEG_LEN + HUMANOID_UPPER_LEG_LEN; // 19
+  const HUMANOID_TORSO_H = 15, HUMANOID_TORSO_W = 11, HUMANOID_TORSO_D = 7;
+  const HUMANOID_ARM_LEN = 9, HUMANOID_UPPER_ARM_LEN = 10;
+  const HUMANOID_HEAD_R = 5.5;
+  const HUMANOID_HEIGHT = HUMANOID_HIP_Y + HUMANOID_TORSO_H + HUMANOID_HEAD_R*2; // ~45
+
+  function buildHumanoid(skinColor, outfitColor){
+    const group = new THREE.Group();
+    const skinMat = new THREE.MeshLambertMaterial({ color: skinColor });
+    const outfitMat = new THREE.MeshLambertMaterial({ color: outfitColor });
+
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(HUMANOID_TORSO_W, HUMANOID_TORSO_H, HUMANOID_TORSO_D), outfitMat);
+    torso.position.y = HUMANOID_HIP_Y + HUMANOID_TORSO_H/2;
+    group.add(torso);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(HUMANOID_HEAD_R, 10, 8), skinMat);
+    head.position.y = HUMANOID_HIP_Y + HUMANOID_TORSO_H + HUMANOID_HEAD_R*0.85;
+    group.add(head);
+
+    function buildLimb(originY, sideX, upperLen, lowerLen, upperMat, lowerMat, upperR, lowerR){
+      const joint = new THREE.Group();
+      joint.position.set(sideX, originY, 0);
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(upperR, upperR*0.9, upperLen, 6), upperMat);
+      upper.position.y = -upperLen/2;
+      joint.add(upper);
+      const joint2 = new THREE.Group();
+      joint2.position.y = -upperLen;
+      const lower = new THREE.Mesh(new THREE.CylinderGeometry(lowerR, lowerR*0.85, lowerLen, 6), lowerMat);
+      lower.position.y = -lowerLen/2;
+      joint2.add(lower);
+      joint.add(joint2);
+      group.add(joint);
+      return joint;
+    }
+
+    const legL = buildLimb(HUMANOID_HIP_Y, -3.2, HUMANOID_UPPER_LEG_LEN, HUMANOID_LEG_LEN, outfitMat, skinMat, 2.6, 2.2);
+    const legR = buildLimb(HUMANOID_HIP_Y,  3.2, HUMANOID_UPPER_LEG_LEN, HUMANOID_LEG_LEN, outfitMat, skinMat, 2.6, 2.2);
+    const shoulderY = HUMANOID_HIP_Y + HUMANOID_TORSO_H - 2.5;
+    const armL = buildLimb(shoulderY, -(HUMANOID_TORSO_W/2+1.6), HUMANOID_UPPER_ARM_LEN, HUMANOID_ARM_LEN, outfitMat, skinMat, 2.1, 1.8);
+    const armR = buildLimb(shoulderY,  (HUMANOID_TORSO_W/2+1.6), HUMANOID_UPPER_ARM_LEN, HUMANOID_ARM_LEN, outfitMat, skinMat, 2.1, 1.8);
+
+    group.userData.rig = { legL, legR, armL, armR, walkPhase: rand(0,Math.PI*2) };
+    group.userData.torso = torso;
+    group.userData.torsoBaseColor = outfitColor;
+    return group;
+  }
+
+  function animateHumanoid(group, dt, moving){
+    const rig = group.userData.rig;
+    rig.walkPhase += dt * (moving ? 8 : 2);
+    const swing = moving ? 0.55 : 0.06;
+    rig.legL.rotation.x = Math.sin(rig.walkPhase) * swing;
+    rig.legR.rotation.x = -Math.sin(rig.walkPhase) * swing;
+    rig.armL.rotation.x = -Math.sin(rig.walkPhase) * swing * 0.85;
+    rig.armR.rotation.x = Math.sin(rig.walkPhase) * swing * 0.85;
+  }
 
   function makeNameTexture(){
     const c = document.createElement('canvas');
@@ -1276,29 +1376,14 @@
   }
 
   function makeBotMesh(e){
-    const group = new THREE.Group();
-    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x7a1f26 });
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(e.radius*0.6, e.radius*0.75, BOT_BODY_HEIGHT, 8), bodyMat);
-    body.position.y = BOT_BODY_HEIGHT/2;
-    group.add(body);
-
-    const headMat = new THREE.MeshLambertMaterial({ color: 0xd8b48c });
-    const head = new THREE.Mesh(new THREE.SphereGeometry(BOT_HEAD_RADIUS, 10, 8), headMat);
-    head.position.y = BOT_BODY_HEIGHT + BOT_HEAD_RADIUS*0.8;
-    group.add(head);
-
-    const visorMat = new THREE.MeshBasicMaterial({ color: 0xff4655 });
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(6,4,3), visorMat);
-    visor.position.set(0, BOT_BODY_HEIGHT*0.7, -e.radius*0.65);
-    group.add(visor);
+    const group = buildHumanoid(0xd8b48c, 0x7a1f26);
 
     e.nameTex = makeNameTexture();
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: e.nameTex.texture, transparent:true, depthTest:false }));
     sprite.scale.set(34, 13, 1);
-    sprite.position.y = BOT_BODY_HEIGHT + BOT_HEAD_RADIUS*2 + 14;
+    sprite.position.y = HUMANOID_HEIGHT + 12;
     group.add(sprite);
 
-    e.bodyMesh = body; e.headMesh = head; e.visorMesh = visor;
     scene.add(group);
     redrawNameTexture(e);
     return group;
@@ -1319,19 +1404,7 @@
 
   // ---------- Third-person camera toggle ----------
   let cameraMode = 'first'; // 'first' | 'third'
-  const playerBodyGroup = new THREE.Group();
-  const playerBody = new THREE.Mesh(
-    new THREE.CylinderGeometry(10, 12, BOT_BODY_HEIGHT, 8),
-    new THREE.MeshLambertMaterial({ color: 0x2f8fa3 })
-  );
-  playerBody.position.y = BOT_BODY_HEIGHT/2;
-  playerBodyGroup.add(playerBody);
-  const playerHead = new THREE.Mesh(
-    new THREE.SphereGeometry(BOT_HEAD_RADIUS, 10, 8),
-    new THREE.MeshLambertMaterial({ color: 0xd8b48c })
-  );
-  playerHead.position.y = BOT_BODY_HEIGHT + BOT_HEAD_RADIUS*0.8;
-  playerBodyGroup.add(playerHead);
+  const playerBodyGroup = buildHumanoid(0xd8b48c, 0x2f8fa3);
   playerBodyGroup.visible = false;
   scene.add(playerBodyGroup);
 
@@ -1339,6 +1412,26 @@
     cameraMode = mode;
     playerBodyGroup.visible = (mode === 'third');
     document.getElementById('camToggleBtn').textContent = mode === 'third' ? '3RD PERSON' : '1ST PERSON';
+  }
+
+  // ---------- Lobby "player skin" preview ----------
+  const previewCanvas = document.getElementById('playerPreview');
+  const previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, antialias:true, alpha:true });
+  const previewScene = new THREE.Scene();
+  const previewCamera = new THREE.PerspectiveCamera(35, 120/160, 0.1, 500);
+  previewCamera.position.set(0, HUMANOID_HEIGHT*0.55, 95);
+  previewCamera.lookAt(0, HUMANOID_HEIGHT*0.5, 0);
+  previewScene.add(new THREE.HemisphereLight(0xffffff, 0x2e5c38, 1.1));
+  const previewSun = new THREE.DirectionalLight(0xfff3d6, 0.7);
+  previewSun.position.set(60, 100, 80);
+  previewScene.add(previewSun);
+  const previewModel = buildHumanoid(0xd8b48c, 0x2f8fa3);
+  previewScene.add(previewModel);
+  function renderPlayerPreview(dt){
+    previewRenderer.setSize(120, 160, false);
+    previewModel.rotation.y += dt * 0.6;
+    animateHumanoid(previewModel, dt, false);
+    previewRenderer.render(previewScene, previewCamera);
   }
 
   function makeEntity(isPlayer, name){
@@ -1906,7 +1999,7 @@
       if(b.life <= 0 || b.y < -20){ disposeBulletMesh(b); return false; }
       for(const e of alive){
         if(e.id === b.ownerId || !e.alive) continue;
-        if(dist(e,b) < e.radius+4 && b.y > -4 && b.y < BOT_BODY_HEIGHT+BOT_HEAD_RADIUS*2+6){
+        if(dist(e,b) < e.radius+4 && b.y > -4 && b.y < HUMANOID_HEIGHT+6){
           const shooter = entities.find(x=>x.id===b.ownerId);
           damage(e, b.dmg, shooter);
           disposeBulletMesh(b);
@@ -1935,20 +2028,23 @@
       triggerEnd(true, 1);
     }
 
-    // sync bot meshes
+    // sync bot meshes — walk-cycle animation driven by their current speed
     for(const e of entities){
       if(e.isPlayer || !e.mesh) continue;
       if(!e.alive) continue;
       e.mesh.position.set(e.x, 0, e.z);
       e.mesh.rotation.y = -e.facing + Math.PI/2;
       redrawNameTexture(e);
-      const flashColor = e.hitFlash > 0 ? 0xffffff : 0x7a1f26;
-      e.bodyMesh.material.color.setHex(flashColor);
+      const moving = Math.hypot(e.vx, e.vz) > 5;
+      animateHumanoid(e.mesh, dt, moving);
+      const flashColor = e.hitFlash > 0 ? 0xffffff : e.mesh.userData.torsoBaseColor;
+      e.mesh.userData.torso.material.color.setHex(flashColor);
     }
 
-    // player body mesh (only visible in third-person)
+    // player body mesh (only visible in third-person) — same walk-cycle animation
     playerBodyGroup.position.set(player.x, 0, player.z);
     playerBodyGroup.rotation.y = -yaw + Math.PI/2;
+    animateHumanoid(playerBodyGroup, dt, Math.hypot(player.vx, player.vz) > 5);
 
     // camera follows player
     if(cameraMode === 'third'){
@@ -2032,6 +2128,9 @@
     lastT = t;
     update(dt);
     render();
+    if(!document.getElementById('startOverlay').classList.contains('hidden')){
+      renderPlayerPreview(dt);
+    }
     requestAnimationFrame(loop);
   }
   resize();
