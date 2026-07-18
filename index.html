@@ -700,8 +700,9 @@
   let particles = [];
   let feedEl = document.getElementById('feed');
   let stormCenter = {x:0, z:0};
-  let stormRadius = 2100;
-  let stormTargetRadius = 2100;
+  const INITIAL_STORM_RADIUS = 2100;
+  let stormRadius = INITIAL_STORM_RADIUS;
+  let stormTargetRadius = INITIAL_STORM_RADIUS;
   let stormPhaseTimer = 0;
   let stormPhase = 0;
   // Scaled up for a bigger map — a full match runs roughly 5 minutes start to finish.
@@ -773,7 +774,19 @@
       apply(e,l){ e.dmgMult = (e.dmgMult||1) * (1.25+l*0.02); e.bulletSpeedMult = (e.bulletSpeedMult||1) * (1.25+l*0.02); } },
     { key:'berserker',   label:'BERSERKER',    color:'#FF2E63',
       desc(l){ return `Fires ${20+l*2}% faster, but -${Math.max(0,15-l)}% damage resistance`; },
-      apply(e,l){ e.fireCdMult = (e.fireCdMult||1) * (0.8-l*0.02); e.armor = (e.armor||0) - Math.max(0,0.15-l*0.01); } }
+      apply(e,l){ e.fireCdMult = (e.fireCdMult||1) * (0.8-l*0.02); e.armor = (e.armor||0) - Math.max(0,0.15-l*0.01); } },
+    { key:'scavenger',   label:'SCAVENGER',    color:'#8CE99A',
+      desc(l){ return `+${15+l*3} max HP, regenerates ${(0.8+l*0.15).toFixed(2)} HP/sec`; },
+      apply(e,l){ const v=15+l*3; e.maxHp += v; e.hp = Math.min(e.maxHp, e.hp+v); e.regen = (e.regen||0) + (0.8+l*0.15); } },
+    { key:'gunslinger',  label:'GUNSLINGER',   color:'#FFB86B',
+      desc(l){ return `Fires ${15+l*2}% faster, +${10+l}% bullet speed`; },
+      apply(e,l){ e.fireCdMult = (e.fireCdMult||1) * (1-(0.15+l*0.02)); e.bulletSpeedMult = (e.bulletSpeedMult||1) * (1+(10+l)/100); } },
+    { key:'bulwark',     label:'BULWARK',      color:'#6FA8DC',
+      desc(l){ return `+${20+l*4} max HP, -${Math.round((0.15+l*0.015)*100)}% damage taken`; },
+      apply(e,l){ const v=20+l*4; e.maxHp += v; e.hp = Math.min(e.maxHp, e.hp+v); e.armor = Math.min(0.6,(e.armor||0)+(0.15+l*0.015)); } },
+    { key:'streak',      label:'STREAK',       color:'#F2789F',
+      desc(l){ return `Fires ${12+l}% faster, +${8+l}% speed`; },
+      apply(e,l){ e.fireCdMult = (e.fireCdMult||1) * (1-(0.12+l*0.01)); e.speed *= 1 + (8+l)/100; } }
   ];
 
   // Reward power-ups — earned only by opening Power Boxes (never automatically unlocked, never given to bots).
@@ -792,7 +805,28 @@
       apply(e,l){ e.regen = (e.regen||0) + (3+l*0.4); e.armor = (e.armor||0) + (0.1+l*0.01); } },
     { key:'apexpredator',  label:'APEX PREDATOR',  color:'#FFD60A',
       desc(l){ return `Shield, +${Math.round((0.3+l*0.02)*100)}% damage, +${Math.round((0.15+l*0.01)*100)}% speed`; },
-      apply(e,l){ e.shield = true; e.dmgMult = (e.dmgMult||1) * (1.3+l*0.02); e.speed *= 1 + (0.15+l*0.01); } }
+      apply(e,l){ e.shield = true; e.dmgMult = (e.dmgMult||1) * (1.3+l*0.02); e.speed *= 1 + (0.15+l*0.01); } },
+    { key:'vanguard',      label:'VANGUARD',       color:'#00C2A8',
+      desc(l){ return `+${35+l*3}% speed, +${20+l*5} max HP`; },
+      apply(e,l){ e.speed *= 1+(35+l*3)/100; const v=20+l*5; e.maxHp+=v; e.hp=Math.min(e.maxHp,e.hp+v); } },
+    { key:'executioner',   label:'EXECUTIONER',    color:'#D62839',
+      desc(l){ return `+${Math.round((0.8+l*0.05)*100)}% bullet damage`; },
+      apply(e,l){ e.dmgMult = (e.dmgMult||1) * (1.8+l*0.05); } },
+    { key:'ironclad',      label:'IRONCLAD',       color:'#9FA8B2',
+      desc(l){ return `+${Math.round((0.3+l*0.02)*100)}% damage reduction, +${60+l*10} max HP`; },
+      apply(e,l){ e.armor = Math.min(0.6,(e.armor||0)+(0.3+l*0.02)); const v=60+l*10; e.maxHp+=v; e.hp=Math.min(e.maxHp,e.hp+v); } },
+    { key:'phantomstrike',  label:'PHANTOM STRIKE', color:'#C9B8FF',
+      desc(l){ return `Much smaller hitbox, +${20+l*3}% damage`; },
+      apply(e,l){ e.radius = Math.max(8, e.radius-5-l*0.3); e.dmgMult = (e.dmgMult||1) * (1.2+l*0.03); } },
+    { key:'relentless',    label:'RELENTLESS',     color:'#FF7B54',
+      desc(l){ return `Fires ${35+l*3}% faster`; },
+      apply(e,l){ e.fireCdMult = (e.fireCdMult||1) * Math.max(0.35, 1-(0.35+l*0.03)); } },
+    { key:'marathon',       label:'MARATHON',       color:'#3DDC97',
+      desc(l){ return `Regenerates ${(5+l*0.5).toFixed(1)} HP/sec, +${40+l*6} max HP`; },
+      apply(e,l){ e.regen = (e.regen||0) + (5+l*0.5); const v=40+l*6; e.maxHp+=v; e.hp=Math.min(e.maxHp,e.hp+v); } },
+    { key:'sharpshooter',   label:'SHARPSHOOTER',   color:'#FFE066',
+      desc(l){ return `+${Math.round((0.45+l*0.03)*100)}% bullet speed, +${25+l*3}% damage`; },
+      apply(e,l){ e.bulletSpeedMult = (e.bulletSpeedMult||1) * (1.45+l*0.03); e.dmgMult = (e.dmgMult||1) * (1.25+l*0.03); } }
   ];
 
   const ALL_POWERUP_TYPES = POWERUP_TYPES.concat(REWARD_POWERUP_TYPES);
@@ -853,17 +887,33 @@
   const UNLOCKED_REWARDS_KEY = 'lastSignalUnlockedRewards';
   const UPGRADES_KEY = 'lastSignalUpgrades';
 
-  function milestoneList(n){
+  // Milestone step size grows as wins climb, so the journey to 100,000 stays meaningful
+  // at every stage instead of needing thousands of flat steps.
+  function nextMilestone(current){
+    if(current < 50)     return current + 10;    // 10, 20, 30, 40, 50
+    if(current < 110)    return current + 20;    // 70, 90, 110
+    if(current < 150)    return 150;              // jump straight to 150
+    if(current < 500)    return current + 50;    // 200, 250, ... 500
+    if(current < 2000)   return current + 100;   // 600, 700, ... 2000
+    if(current < 10000)  return current + 200;   // 2200, 2400, ... 10000
+    if(current < 50000)  return current + 500;   // 10500, 11000, ... 50000
+    if(current < 100000) return current + 1000;  // 51000, ... 100000
+    return current; // capped — 100,000 is the top of the tracker
+  }
+  const ALL_MILESTONES = (function(){
     const list = [];
-    for(let i=0;i<n;i++){
-      list.push(i<5 ? (i+1)*10 : 50 + (i-4)*20);
+    let v = 0;
+    while(true){
+      const next = nextMilestone(v);
+      if(next === v) break;
+      list.push(next);
+      v = next;
     }
     return list;
-  }
+  })();
   function milestoneCountForWins(wins){
     let count = 0;
-    for(const m of [10,20,30,40,50]){ if(wins>=m) count++; }
-    if(wins>50){ count += Math.floor((wins-50)/20); }
+    for(const m of ALL_MILESTONES){ if(wins >= m) count++; else break; }
     return count;
   }
   function getCoins(){
@@ -1162,16 +1212,26 @@
   // ---------- Win tracker screen ----------
   function renderWinTracker(){
     const wins = getWins();
-    const milestones = milestoneList(8); // 10,20,30,40,50,70,90,110
-    const maxScale = milestones[milestones.length-1];
-    const pct = clamp(wins/maxScale, 0, 1) * 100;
+    const cap = ALL_MILESTONES[ALL_MILESTONES.length-1]; // 100,000
+
+    // show a window of milestones around where the player currently is, rather than
+    // cramming all ~48 onto one bar — the bar re-scales itself as you climb.
+    const nextIdx = ALL_MILESTONES.findIndex(m => wins < m);
+    const atCap = nextIdx === -1;
+    const windowStart = atCap ? Math.max(0, ALL_MILESTONES.length-6) : Math.max(0, nextIdx-1);
+    const windowMilestones = ALL_MILESTONES.slice(windowStart, windowStart+6);
+    const floorVal = windowStart > 0 ? ALL_MILESTONES[windowStart-1] : 0;
+    const maxScale = windowMilestones[windowMilestones.length-1] || cap;
+    const span = Math.max(1, maxScale - floorVal);
+    const pct = clamp((wins-floorVal)/span, 0, 1) * 100;
+
     document.getElementById('wtBarFill').style.height = pct + '%';
-    document.getElementById('wtTotal').innerHTML = `${wins}<span>wins</span>`;
+    document.getElementById('wtTotal').innerHTML = `${wins.toLocaleString()}<span>/ ${cap.toLocaleString()} wins</span>`;
 
     const track = document.getElementById('wtBarTrack');
     track.querySelectorAll('.wt-tick, .wt-tick-label').forEach(n=>n.remove());
-    milestones.forEach(m=>{
-      const frac = m / maxScale;
+    windowMilestones.forEach(m=>{
+      const frac = (m-floorVal) / span;
       const tick = document.createElement('div');
       tick.className = 'wt-tick';
       tick.style.bottom = (frac*100) + '%';
@@ -1181,14 +1241,14 @@
       const unlocked = wins >= m;
       label.className = 'wt-tick-label' + (unlocked ? ' unlocked' : '');
       label.style.bottom = (frac*100) + '%';
-      label.textContent = `${m} — POWER BOX${unlocked ? ' ✓' : ''}`;
+      label.textContent = `${m.toLocaleString()} — POWER BOX${unlocked ? ' ✓' : ''}`;
       track.appendChild(label);
     });
 
-    const next = milestones.find(m => wins < m);
+    const next = ALL_MILESTONES.find(m => wins < m);
     document.getElementById('wtNextReward').textContent = next
-      ? `${next - wins} more win${next-wins===1?'':'s'} to earn a Power Box`
-      : 'Keep winning — a box arrives every 20 wins from here';
+      ? `${(next - wins).toLocaleString()} more win${next-wins===1?'':'s'} to earn a Power Box`
+      : `Maxed out at ${cap.toLocaleString()} wins — legendary`;
 
     const pending = getPendingBoxCount();
     const collectBtn = document.getElementById('wtCollectBtn');
@@ -1564,8 +1624,8 @@
     weaponPickups = [];
     feedEl.innerHTML = '';
     killCount = 0;
-    stormRadius = 2100;
-    stormTargetRadius = 2100;
+    stormRadius = INITIAL_STORM_RADIUS;
+    stormTargetRadius = INITIAL_STORM_RADIUS;
     stormPhase = 0;
     stormPhaseTimer = STORM_PHASES[0].wait;
     stormShrinking = false;
@@ -1883,7 +1943,7 @@
       stormPhaseTimer -= dt;
       const total = STORM_PHASES[stormPhase].shrinkTime;
       const t = clamp(1 - (stormPhaseTimer/total), 0, 1);
-      const startR = STORM_PHASES[stormPhase-1] ? STORM_PHASES[stormPhase-1].shrinkTo : 1050;
+      const startR = STORM_PHASES[stormPhase-1] ? STORM_PHASES[stormPhase-1].shrinkTo : INITIAL_STORM_RADIUS;
       stormRadius = startR + (stormTargetRadius-startR)*t;
       if(stormPhaseTimer <= 0){
         stormRadius = stormTargetRadius;
