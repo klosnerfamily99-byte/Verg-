@@ -43,6 +43,12 @@
     padding:24px; line-height:1.6;
   }
   #rotateIcon{ font-size:48px; color:var(--amber); margin-bottom:18px; animation: pulseNum 1.4s infinite; }
+  #fullscreenBtn{
+    position:absolute; left:16px; bottom:calc(74px + env(safe-area-inset-bottom)); z-index:500;
+    background:rgba(11,15,18,0.7); border:1px solid var(--amber); color:var(--amber);
+    font-family:inherit; font-size:9px; letter-spacing:1px; text-transform:uppercase;
+    padding:6px 10px; cursor:pointer;
+  }
   @media (orientation: portrait){
     #rotatePrompt{ display:flex; }
     #wrap > *:not(#rotatePrompt){ visibility:hidden; }
@@ -81,6 +87,13 @@
   }
   #crosshair::before{ left:50%; top:0; width:2px; height:16px; transform:translateX(-50%); }
   #crosshair::after{ top:50%; left:0; height:2px; width:16px; transform:translateY(-50%); }
+
+  #interactPrompt{
+    position:absolute; left:50%; top:calc(50% + 34px); transform:translateX(-50%);
+    z-index:7; background:rgba(11,15,18,0.8); border:1px solid var(--amber); color:var(--amber);
+    font-family:inherit; font-size:11px; letter-spacing:1.5px; text-transform:uppercase;
+    padding:8px 16px; cursor:pointer; white-space:nowrap;
+  }
 
   #healthWrap{
     position:absolute; left:16px; bottom:calc(16px + env(safe-area-inset-bottom));
@@ -194,7 +207,7 @@
   .scrollableOverlay{ touch-action:pan-y; }
 
   .greenGlow{
-    background:#0d2a1a;
+    background:#1d6b3a;
     overflow:hidden;
   }
   .greenGlow::before{
@@ -203,9 +216,9 @@
     top:50%; left:50%;
     width:220vmax; height:220vmax;
     margin-left:-110vmax; margin-top:-110vmax;
-    background: conic-gradient(from 0deg,
-      rgba(124,242,156,0.38) 0deg, transparent 35deg,
-      transparent 325deg, rgba(124,242,156,0.38) 360deg);
+    background: repeating-conic-gradient(from 0deg,
+      rgba(255,255,255,0.65) 0deg 6deg,
+      transparent 6deg 72deg);
     animation: spinLight 7s linear infinite;
     z-index:0;
   }
@@ -365,9 +378,11 @@
     <div id="rotateIcon">⟳</div>
     <div>Rotate your device to landscape<br>to play VERGE</div>
   </div>
+  <button id="fullscreenBtn">FULLSCREEN</button>
   <canvas id="game"></canvas>
   <canvas id="minimap"></canvas>
   <div id="crosshair"></div>
+  <div id="interactPrompt" class="hidden">TAP TO OPEN CHEST</div>
 
   <div id="hud">
     <div class="hud-block" id="alive">Remaining<br><b id="aliveCount">-</b></div>
@@ -426,10 +441,11 @@
     <div class="hint">Desktop: WASD to move, click the screen once then move the mouse to look, Space or click to fire.<br>
     Mobile: left thumb to move, drag anywhere on the right to look around, tap FIRE to shoot where you're looking.<br>
     Everyone drops in lined up on the edge of the island's safe zone — you can't move until the 5-second countdown hits zero. Each player spawns already holding one random power-up, revealed to you as the countdown runs.<br>
-    The island is bigger now — a full match runs about 5 minutes. Forests and rocks ring the outside; a city sits in the middle where you can find SMGs, rifles, shotguns, and sniper rifles lying around (everyone starts with just a pistol).<br>
+    The island is bigger now — a full match runs about 5 minutes. Forests and rocks ring the outside; a city sits in the middle with weapon chests (everyone starts with just a pistol). Chests are random — you won't know what's inside until you open one, and every gun comes in a rarity from Common up through Rare, Epic, Mythic, and the ultra-rare Crazy tier.<br>
     Stay inside the cyan wall. Last one standing wins.<br>
-    Casual: 1st +3 wins · 2nd +2 · 3rd +1 · 4th +0 · 5th and below lose wins. Every 10 wins (then every 20 past 50) earns a Power Box — open it for coins or a rare power-up, and spend coins to upgrade any power-up up to 5 times.<br>
-    Ranked: climb Bronze → Silver → Gold → Platinum → Diamond → Champion. Higher ranks face tougher bots, and rewards shrink each promotion.</div>
+    Casual: 1st +3 wins · 2nd +2 · 3rd +1 · 4th +0 · 5th and below lose wins. Win milestones (Power Boxes) come every 10 wins early on, spacing out further the higher you climb, all the way to 100,000. Open boxes for coins or a rare power-up, and spend coins to upgrade any power-up up to 5 times.<br>
+    Ranked: climb Bronze → Silver → Gold → Platinum → Diamond → Champion. Higher ranks face tougher bots, and rewards shrink each promotion.<br>
+    Tip: tap FULLSCREEN (top-right) if the UI feels cut off. On iPhone, Safari doesn't support in-page fullscreen — use Share → Add to Home Screen instead for the same effect.</div>
   </div>
 
   <div class="overlay hidden" id="endOverlay">
@@ -832,7 +848,8 @@
   const ALL_POWERUP_TYPES = POWERUP_TYPES.concat(REWARD_POWERUP_TYPES);
 
   // ---------- Weapons ----------
-  // Everyone starts with the pistol. Better guns are found only as pickups in the city.
+  // Everyone starts with the pistol. Better guns are found only in city chests — random contents,
+  // random rarity. Rarity scales a weapon's damage/fire-rate/bullet-speed on top of its base stats.
   const WEAPON_TYPES = [
     { key:'pistol',  label:'PISTOL',  color:'#9AA5AC', dmg:16, fireCooldown:0.22, bulletSpeed:640,  pellets:1, spread:0 },
     { key:'smg',     label:'SMG',     color:'#4FD8EA', dmg:10, fireCooldown:0.10, bulletSpeed:620,  pellets:1, spread:0.03 },
@@ -841,7 +858,45 @@
     { key:'sniper',  label:'SNIPER',  color:'#FFD60A', dmg:55, fireCooldown:0.85, bulletSpeed:1000, pellets:1, spread:0.003 }
   ];
   const PISTOL = WEAPON_TYPES[0];
-  const CITY_WEAPON_TYPES = WEAPON_TYPES.slice(1); // the 4 guns you can actually find
+  const CITY_WEAPON_TYPES = WEAPON_TYPES.slice(1); // the 4 guns found in chests
+
+  // Worst/most common first, best/rarest last.
+  const RARITY_TIERS = [
+    { key:'common', label:'COMMON', color:'#9AA5AC', mult:1.0,  weight:50 },
+    { key:'rare',   label:'RARE',   color:'#4FD8EA', mult:1.15, weight:28 },
+    { key:'epic',   label:'EPIC',   color:'#B266FF', mult:1.35, weight:14 },
+    { key:'mythic', label:'MYTHIC', color:'#FF6EC7', mult:1.6,  weight:6  },
+    { key:'crazy',  label:'CRAZY',  color:'#FFD60A', mult:2.0,  weight:2  }
+  ];
+  PISTOL.rarity = RARITY_TIERS[0]; // your starting sidearm reads as a plain common weapon
+
+  function rollRarity(){
+    const r = Math.random()*100;
+    let cum = 0;
+    for(const tier of RARITY_TIERS){
+      cum += tier.weight;
+      if(r < cum) return tier;
+    }
+    return RARITY_TIERS[RARITY_TIERS.length-1];
+  }
+
+  // Rolls a random gun type AND a random rarity, and bakes the rarity bonus into a fresh
+  // weapon-instance object (never mutates the shared base WEAPON_TYPES entries).
+  function rollChestWeapon(){
+    const base = CITY_WEAPON_TYPES[Math.floor(Math.random()*CITY_WEAPON_TYPES.length)];
+    const rarity = rollRarity();
+    return {
+      key: base.key,
+      label: `${rarity.label} ${base.label}`,
+      color: rarity.color,
+      rarity: rarity,
+      dmg: base.dmg * rarity.mult,
+      fireCooldown: base.fireCooldown / rarity.mult,
+      bulletSpeed: base.bulletSpeed * (1 + (rarity.mult-1)*0.5),
+      pellets: base.pellets,
+      spread: base.spread
+    };
+  }
 
   function assignRandomPowerup(e, pool){
     const list = pool || POWERUP_TYPES;
@@ -1566,35 +1621,109 @@
     for(const e of entities){ disposeBotMesh(e); }
     for(const b of bullets){ disposeBulletMesh(b); }
     for(const p of particles){ if(p.mesh){ scene.remove(p.mesh); p.mesh.material.dispose(); } }
-    for(const wp of weaponPickups){ if(wp.mesh){ scene.remove(wp.mesh); wp.mesh.material.dispose(); } }
+    for(const wp of weaponPickups){
+      if(wp.mesh){
+        scene.remove(wp.mesh);
+        wp.mesh.traverse(obj=>{ if(obj.geometry) obj.geometry.dispose && obj.geometry.dispose(); });
+      }
+    }
   }
 
   // ---------- Weapon pickups (city only) ----------
   let weaponPickups = [];
-  const pickupGeo = new THREE.OctahedronGeometry(11, 0);
+  const CHEST_COLLIDE_RADIUS = 12; // you can't walk through an unopened chest
+  const CHEST_INTERACT_RANGE = 46; // how close the player must be to see the "open" prompt
+  let nearbyChest = null;
+  let gunPopEffects = [];
+
+  // Chests don't reveal what's inside until opened — a plain crate, not weapon-colored.
+  const chestBaseMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2f });
+  const chestLidMat = new THREE.MeshLambertMaterial({ color: 0x8a6238 });
+  const chestBandMat = new THREE.MeshBasicMaterial({ color: 0xd9a441 });
+  function makeChestMesh(){
+    const group = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(18, 12, 13), chestBaseMat);
+    base.position.y = 6;
+    group.add(base);
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(19, 5, 14), chestLidMat);
+    lid.position.y = 14.5;
+    group.add(lid);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(20, 3, 15), chestBandMat);
+    band.position.y = 11;
+    group.add(band);
+    return group;
+  }
   function spawnWeaponPickups(count){
     for(let i=0;i<count;i++){
-      const type = CITY_WEAPON_TYPES[i % CITY_WEAPON_TYPES.length];
       let x=0, z=0, ok=false;
       for(let tries=0; tries<12 && !ok; tries++){
         const a = rand(0,Math.PI*2), r = rand(0, CITY_RADIUS*0.88);
         x = Math.cos(a)*r; z = Math.sin(a)*r;
         ok = !buildingFootprints.some(b => Math.hypot(x-b.x, z-b.z) < b.radius+18);
       }
-      const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(type.color).getHex() });
-      const mesh = new THREE.Mesh(pickupGeo, mat);
-      mesh.position.set(x, 20, z);
+      const mesh = makeChestMesh();
+      mesh.position.set(x, 0, z);
       scene.add(mesh);
-      weaponPickups.push({ x, z, type, taken:false, mesh, spin: rand(0,Math.PI*2) });
+      weaponPickups.push({ x, z, taken:false, mesh, spin: rand(0,Math.PI*2) });
     }
   }
 
-  // ---------- Weapon hotbar ----------
-  function addToPlayerInventory(type){
-    if(!player.weapons.find(w=>w.key===type.key)){
-      player.weapons.push(type);
+  // Gun-shaped silhouette per weapon type, colored by the rarity that was rolled —
+  // pops up out of the chest for a moment when it's opened.
+  function gunShapeGeometry(key){
+    if(key === 'smg')     return new THREE.BoxGeometry(4.5, 4.5, 15);
+    if(key === 'rifle')   return new THREE.BoxGeometry(3.2, 3.2, 24);
+    if(key === 'shotgun') return new THREE.BoxGeometry(5.5, 5.5, 19);
+    if(key === 'sniper')  return new THREE.BoxGeometry(2.6, 2.6, 32);
+    return new THREE.BoxGeometry(4, 4, 12); // pistol / fallback
+  }
+  function spawnGunPopEffect(x, z, instance){
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(instance.rarity.color).getHex(),
+      transparent: true, opacity: 1
+    });
+    const mesh = new THREE.Mesh(gunShapeGeometry(instance.key), mat);
+    mesh.position.set(x, 10, z);
+    mesh.rotation.x = Math.PI/2;
+    scene.add(mesh);
+    gunPopEffects.push({ mesh, life: 1.0, maxLife: 1.0 });
+  }
+
+  // Removes the chest from the world and plays its gun-pop visual. Does NOT grant the weapon —
+  // callers apply the actual pickup (addToPlayerInventory / e.weapon = ...) themselves.
+  function openChestPickup(wp, instance){
+    wp.taken = true;
+    spawnGunPopEffect(wp.x, wp.z, instance);
+    if(wp.mesh){
+      scene.remove(wp.mesh);
+      wp.mesh.traverse(obj=>{ if(obj.geometry) obj.geometry.dispose && obj.geometry.dispose(); });
+      wp.mesh = null;
     }
-    player.weapon = type; // auto-equip whatever you just picked up
+    if(wp === nearbyChest) nearbyChest = null;
+  }
+
+  function tryOpenChest(){
+    if(!nearbyChest || nearbyChest.taken || !player || !player.alive) return;
+    const wp = nearbyChest;
+    const instance = rollChestWeapon();
+    openChestPickup(wp, instance);
+    addToPlayerInventory(instance);
+  }
+
+  // ---------- Weapon hotbar ----------
+  function addToPlayerInventory(instance){
+    const idx = player.weapons.findIndex(w=>w.key===instance.key);
+    if(idx === -1){
+      player.weapons.push(instance);
+      player.weapon = instance;
+      addFeed(`You found a ${instance.label}!`, false);
+    } else if(instance.rarity.mult > player.weapons[idx].rarity.mult){
+      player.weapons[idx] = instance;
+      player.weapon = instance;
+      addFeed(`Upgraded to a ${instance.label}!`, false);
+    } else {
+      addFeed(`Found a ${instance.label} (kept your better one)`, false);
+    }
     renderHotbar();
   }
   function switchToWeapon(idx){
@@ -1683,6 +1812,7 @@
     keys[e.key.toLowerCase()] = true;
     if(e.key === ' '){ fireHeld = true; e.preventDefault(); }
     if(e.key >= '1' && e.key <= '5'){ switchToWeapon(parseInt(e.key,10)-1); }
+    if(e.key.toLowerCase() === 'e'){ tryOpenChest(); }
   });
   window.addEventListener('keyup', e=>{
     keys[e.key.toLowerCase()] = false;
@@ -2020,14 +2150,38 @@
         }
       }
 
-      // weapon pickups (city only) — first entity to walk over one equips it
+      // chest collision — you can't walk through an unopened chest
       for(const wp of weaponPickups){
         if(wp.taken) continue;
-        if(Math.hypot(e.x-wp.x, e.z-wp.z) < e.radius + 16){
-          wp.taken = true;
-          if(e.isPlayer){ addToPlayerInventory(wp.type); } else { e.weapon = wp.type; }
-          addFeed(`${e.name} picked up a ${wp.type.label}`, false);
-          if(wp.mesh){ scene.remove(wp.mesh); wp.mesh.material.dispose(); wp.mesh = null; }
+        const cdx = e.x-wp.x, cdz = e.z-wp.z;
+        const cdist = Math.hypot(cdx, cdz);
+        const minD = e.radius + CHEST_COLLIDE_RADIUS;
+        if(cdist < minD && cdist > 0.001){
+          const push = minD/cdist;
+          e.x = wp.x + cdx*push;
+          e.z = wp.z + cdz*push;
+        }
+      }
+
+      if(e.isPlayer){
+        // player must explicitly interact (tap/E) — just track what's in range here
+        nearbyChest = null;
+        let nearestD = Infinity;
+        for(const wp of weaponPickups){
+          if(wp.taken) continue;
+          const d = Math.hypot(e.x-wp.x, e.z-wp.z);
+          if(d < CHEST_INTERACT_RANGE && d < nearestD){ nearestD = d; nearbyChest = wp; }
+        }
+      } else {
+        // bots still open chests automatically on contact
+        for(const wp of weaponPickups){
+          if(wp.taken) continue;
+          if(Math.hypot(e.x-wp.x, e.z-wp.z) < e.radius + 16){
+            const instance = rollChestWeapon();
+            e.weapon = instance;
+            addFeed(`${e.name} found a ${instance.label}`, false);
+            openChestPickup(wp, instance);
+          }
         }
       }
 
@@ -2042,12 +2196,29 @@
       }
     }
     weaponPickups = weaponPickups.filter(wp=>!wp.taken);
+    document.getElementById('interactPrompt').classList.toggle('hidden', !nearbyChest);
 
-    // spin weapon pickups for visual flair
+    // gently rotate chests in place (they sit on the ground, unlike the old floating pickups)
     for(const wp of weaponPickups){
-      wp.spin += dt*1.4;
-      if(wp.mesh){ wp.mesh.rotation.y = wp.spin; wp.mesh.position.y = 20 + Math.sin(wp.spin*1.3)*4; }
+      wp.spin += dt*0.6;
+      if(wp.mesh){ wp.mesh.rotation.y = wp.spin; }
     }
+
+    // animate gun-pop effects (visual only — the pickup itself already happened)
+    for(const g of gunPopEffects){
+      g.life -= dt;
+      const t = 1 - clamp(g.life/g.maxLife, 0, 1);
+      g.mesh.position.y = 10 + t*34;
+      g.mesh.rotation.y += dt*3;
+      const fadeStart = 0.7;
+      if(t > fadeStart){
+        g.mesh.material.opacity = clamp(1-(t-fadeStart)/(1-fadeStart), 0, 1);
+      }
+    }
+    gunPopEffects = gunPopEffects.filter(g=>{
+      if(g.life <= 0){ scene.remove(g.mesh); g.mesh.geometry.dispose(); g.mesh.material.dispose(); return false; }
+      return true;
+    });
 
     // bullets
     for(const b of bullets){
@@ -2326,6 +2497,33 @@
   document.getElementById('camToggleBtn').addEventListener('click', ()=>{
     setCameraMode(cameraMode === 'first' ? 'third' : 'first');
   });
+
+  // ---------- Fullscreen toggle ----------
+  function isFullscreen(){
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  function updateFullscreenBtn(){
+    document.getElementById('fullscreenBtn').textContent = isFullscreen() ? 'EXIT FULLSCREEN' : 'FULLSCREEN';
+  }
+  function toggleFullscreen(){
+    const el = document.documentElement;
+    if(!isFullscreen()){
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if(req){ req.call(el).catch(()=>{}); }
+      // iOS Safari doesn't support requestFullscreen at all — "Add to Home Screen" is the real fix there.
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if(exit){ exit.call(document); }
+    }
+  }
+  document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+
+  document.getElementById('interactPrompt').addEventListener('click', tryOpenChest);
+  document.getElementById('interactPrompt').addEventListener('touchstart', (ev)=>{
+    ev.preventDefault(); ev.stopPropagation(); tryOpenChest();
+  }, {passive:false});
+  document.addEventListener('fullscreenchange', updateFullscreenBtn);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenBtn);
 
   refreshLobbyExtras();
 
